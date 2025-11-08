@@ -10,9 +10,9 @@ let appState = {
     history: [],
     dailyChallenges: [],
     events: [],
-    eventRsvps: [], // <-- NEW: To store user's RSVPs
+    eventRsvps: [],
     stores: [],
-    products: [], // <-- NEW: Added products to state
+    products: [],
     userRewards: [],
     levels: [],
 };
@@ -39,7 +39,6 @@ const userLevelSidebar = document.getElementById('user-level-sidebar');
 
 const checkInCard = document.getElementById('daily-check-in-card');
 
-// --- NEW: Dashboard Element IDs ---
 const dashboardEventCard = document.getElementById('dashboard-event-card');
 const impactCo2 = document.getElementById('impact-co2');
 const impactRecycled = document.getElementById('impact-recycled');
@@ -85,13 +84,41 @@ const qrModal = document.getElementById('qr-modal');
 
 const allRewardsList = document.getElementById('all-rewards-list');
 
+// --- NEW: Change Password Form Elements ---
+const changePasswordForm = document.getElementById('change-password-form');
+const changePasswordButton = document.getElementById('change-password-button');
+const passwordMessage = document.getElementById('password-message');
+
 // --- Helper Functions ---
 
 const getTodayDateString = () => {
     return new Date().toISOString().split('T')[0];
 };
 
-// Modified: Now reads from appState.products and appState.stores
+/**
+ * NEW: Activity Logging Function
+ * Logs user interactions to the 'activity_log' table without waiting.
+ */
+async function logActivity(activity_type, details = {}) {
+    try {
+        if (!appState.currentUser) return; // Don't log if user isn't loaded
+
+        const { error } = await supabase
+            .from('activity_log')
+            .insert({
+                student_id: appState.currentUser.student_id,
+                activity_type,
+                details
+            });
+        
+        if (error) {
+            console.warn("Error logging activity:", error.message);
+        }
+    } catch (err) {
+        console.warn("Failed to log activity:", err);
+    }
+}
+
 const getRewardDetails = (userReward) => {
      if (!userReward) return null;
     const product = appState.products.find(p => p.id === userReward.product_id);
@@ -110,7 +137,6 @@ const getRewardDetails = (userReward) => {
     };
 };
 
-// Modified: Now reads from appState.products and appState.stores
 const getProduct = (storeId, productId) => {
     const store = appState.stores.find(s => s.id === storeId);
     if (!store) return { store: null, product: null };
@@ -133,10 +159,9 @@ const getUserLevel = (points) => {
     
     const nextLevel = appState.levels.find(l => l.level_number === currentLevel.level_number + 1);
 
-    // Find the color/bg from the level definitions (assuming you add them to your table)
     const levelInfo = {
-        color: 'text-green-600', // Default
-        progressBg: 'bg-green-500' // Default
+        color: 'text-green-600',
+        progressBg: 'bg-green-500'
     };
 
     if (nextLevel) {
@@ -151,7 +176,6 @@ const getUserLevel = (points) => {
             progressText: `${points} / ${nextLevel.min_points} Pts`
         };
     } else {
-        // Max level
         return {
             ...levelInfo,
             level: currentLevel.level_number,
@@ -170,18 +194,13 @@ async function fetchUserProfile() {
         window.location.href = 'login.html';
         return;
     }
-
     const { data, error } = await supabase
         .from('students')
         .select('*')
         .eq('auth_id', user.id)
         .single();
-    
-    if (error) {
-        console.error("Error fetching student profile:", error.message);
-    } else {
-        appState.currentUser = data;
-    }
+    if (error) console.error("Error fetching student profile:", error.message);
+    else appState.currentUser = data;
 }
 
 async function fetchLeaderboard() {
@@ -190,7 +209,6 @@ async function fetchLeaderboard() {
         .select('student_id, name, avatar_url, lifetime_points')
         .order('lifetime_points', { ascending: false })
         .limit(10);
-        
     if (error) console.error("Error fetching leaderboard:", error.message);
     else appState.leaderboard = data;
 }
@@ -199,34 +217,24 @@ async function fetchHistory() {
     const { data, error } = await supabase
         .from('points_history')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(20); // Fetch more for calculations
-        
+        .order('created_at', { ascending: false }); // Fetch all history
     if (error) console.error("Error fetching history:", error.message);
     else appState.history = data;
 }
 
 async function fetchChallenges() {
-    const { data: challenges, error: chalError } = await supabase
-        .from('challenges')
-        .select('*');
-        
+    const { data: challenges, error: chalError } = await supabase.from('challenges').select('*');
     if (chalError) {
         console.error("Error fetching challenges:", chalError.message);
         return;
     }
-
     const today = getTodayDateString();
     const { data: completions, error: compError } = await supabase
         .from('challenge_completions')
         .select('challenge_id')
         .eq('student_id', appState.currentUser.student_id)
         .eq('completed_at', today);
-
-    if (compError) {
-        console.error("Error fetching completions:", compError.message);
-    }
-
+    if (compError) console.error("Error fetching completions:", compError.message);
     const completedIds = completions ? completions.map(c => c.challenge_id) : [];
     appState.dailyChallenges = challenges.map(challenge => ({
         ...challenge,
@@ -235,15 +243,12 @@ async function fetchChallenges() {
 }
 
 async function fetchEventsAndRSVPs() {
-    // Fetch events and RSVPs in parallel
     const [eventsResult, rsvpsResult] = await Promise.all([
         supabase.from('events').select('*').order('event_date', { ascending: true }),
         supabase.from('event_rsvps').select('*').eq('student_id', appState.currentUser.student_id)
     ]);
-
     if (eventsResult.error) console.error("Error fetching events:", eventsResult.error.message);
     else appState.events = eventsResult.data;
-    
     if (rsvpsResult.error) console.error("Error fetching RSVPs:", rsvpsResult.error.message);
     else appState.eventRsvps = rsvpsResult.data;
 }
@@ -253,10 +258,8 @@ async function fetchStoresAndProducts() {
         supabase.from('stores').select('*'),
         supabase.from('products').select('*')
     ]);
-
     if (storesResult.error) console.error("Error fetching stores:", storesResult.error.message);
     else appState.stores = storesResult.data;
-    
     if (productsResult.error) console.error("Error fetching products:", productsResult.error.message);
     else appState.products = productsResult.data;
 }
@@ -266,7 +269,6 @@ async function fetchUserRewards() {
         .from('user_rewards')
         .select('*')
         .order('purchase_date', { ascending: false });
-        
     if (error) console.error("Error fetching user rewards:", error.message);
     else appState.userRewards = data;
 }
@@ -276,7 +278,6 @@ async function fetchLevels() {
         .from('levels')
         .select('*')
         .order('level_number', { ascending: true });
-        
     if (error) console.error("Error fetching levels:", error.message);
     else appState.levels = data;
 }
@@ -286,10 +287,9 @@ async function fetchLevels() {
 const renderHeader = () => {
     const user = appState.currentUser;
     if (!user) return;
-    
     const levelInfo = getUserLevel(user.lifetime_points); 
     userPointsHeader.textContent = user.current_points;
-    userNameGreeting.textContent = user.name; // <-- MODIFIED: Show full name
+    userNameGreeting.textContent = user.name;
     userAvatarSidebar.src = user.avatar_url || 'https://placehold.co/80x80/gray/white?text=User';
     userNameSidebar.textContent = user.name;
     userPointsSidebar.textContent = user.current_points;
@@ -300,7 +300,6 @@ const renderHeader = () => {
 const renderCheckInCard = () => {
     const user = appState.currentUser;
     if (!user) return;
-    
     const today = getTodayDateString();
     
     if (user.last_check_in_date === today) {
@@ -331,20 +330,19 @@ const renderCheckInCard = () => {
     lucide.createIcons();
 };
 
-// --- NEW: Render Dashboard Function ---
-// This function populates all dynamic content on the dashboard
+// --- MODIFIED: renderDashboard (now calculates impact stats) ---
 const renderDashboard = () => {
     const user = appState.currentUser;
     if (!user) return;
 
     // 1. Render Greeting
-    userNameGreeting.textContent = user.name; // Full name
+    userNameGreeting.textContent = user.name;
 
     // 2. Render Dynamic Event Card
     const now = new Date();
     const upcomingEvent = appState.events.find(e => new Date(e.event_date) > now);
     
-    dashboardEventCard.innerHTML = ''; // Clear old content
+    dashboardEventCard.innerHTML = '';
     if (upcomingEvent) {
         dashboardEventCard.innerHTML = `
             <div class="bg-gradient-to-r from-green-500 to-teal-500 text-white p-5 rounded-xl mb-6 shadow-lg">
@@ -383,7 +381,7 @@ const renderDashboard = () => {
     renderLeaderboardDashboard();
     renderChallengesDashboard();
     
-    lucide.createIcons(); // Re-initialize icons
+    lucide.createIcons();
 };
 
 
@@ -402,7 +400,6 @@ const renderLeaderboardDashboard = () => {
         if (rank === 1) rankBadge = `<i data-lucide="award" class="w-6 h-6 text-yellow-500"></i>`;
         else if (rank === 2) rankBadge = `<i data-lucide="award" class="w-6 h-6 text-gray-400"></i>`;
         else if (rank === 3) rankBadge = `<i data-lucide="award" class="w-6 h-6 text-yellow-700"></i>`;
-
         const isCurrentUserClass = user.student_id === appState.currentUser.student_id ? 'bg-green-100 border-l-4 border-green-500' : 'bg-white';
         
         leaderboardDashboardList.innerHTML += `
@@ -432,7 +429,6 @@ const renderLeaderboardPage = () => {
         if (rank === 1) rankBadge = `<i data-lucide="award" class="w-6 h-6 text-yellow-500"></i>`;
         else if (rank === 2) rankBadge = `<i data-lucide="award" class="w-6 h-6 text-gray-400"></i>`;
         else if (rank === 3) rankBadge = `<i data-lucide="award" class="w-6 h-6 text-yellow-700"></i>`;
-
         const isCurrentUserClass = user.student_id === appState.currentUser.student_id ? 'bg-green-100 border-2 border-green-500' : 'bg-white';
         
         leaderboardPageList.innerHTML += `
@@ -514,7 +510,8 @@ const renderProfile = () => {
     profileAvatar.src = user.avatar_url || 'https://placehold.co/80x80/gray/white?text=User';
     profileName.textContent = user.name;
     profileEmail.textContent = user.email;
-    profileJoined.textContent = `Joined ${new Date(user.joined_at).toLocaleDateString()}`;
+    // --- MODIFIED: Date format ---
+    profileJoined.textContent = `Joined ${new Date(user.joined_at).toLocaleDateString('en-GB')}`; // dd/mm/yyyy
     
     profileLevelTitle.textContent = levelInfo.title;
     profileLevelTitle.className = `text-sm font-semibold ${levelInfo.color || 'text-gray-600'}`;
@@ -602,7 +599,8 @@ const renderEcoPointsPage = () => {
             const pointClass = item.points_change >= 0 ? 'text-green-600' : 'text-red-600';
             const sign = item.points_change >= 0 ? '+' : '';
             const icon = item.type === 'reward-purchase' ? 'shopping-cart' : 
-                         item.type === 'check-in' ? 'log-in' : 'award';
+                         item.type === 'check-in' ? 'log-in' : 
+                         item.type === 'event' ? 'calendar-check' : 'award';
             ecopointsRecentActivity.innerHTML += `
                 <div class="flex items-center">
                     <div class="p-2 bg-gray-100 rounded-lg mr-3">
@@ -654,8 +652,6 @@ const renderHistory = () => {
     lucide.createIcons();
 };
 
-// --- MODIFIED: renderEvents() ---
-// This function now correctly renders events and checks for RSVPs
 const renderEvents = () => {
     eventList.innerHTML = '';
     const events = appState.events;
@@ -665,7 +661,6 @@ const renderEvents = () => {
     }
 
     events.forEach(e => {
-        // Check if the user has already RSVP'd
         const hasRSVPd = appState.eventRsvps.some(rsvp => rsvp.event_id === e.id);
         
         const rsvpButton = hasRSVPd
@@ -799,7 +794,9 @@ const renderMyRewardsPage = () => {
 
 // --- App Logic (Actions that write to Supabase) ---
 
+// Make functions global so inline HTML can call them
 window.performCheckIn = async () => {
+    logActivity('button_click', { action: 'perform_check_in_attempt' });
     const today = getTodayDateString();
     if (appState.currentUser.last_check_in_date === today) {
         return; 
@@ -829,6 +826,7 @@ window.performCheckIn = async () => {
         return;
     }
 
+    logActivity('check_in_success', { points: CHECK_IN_REWARD });
     appState.currentUser.last_check_in_date = today;
     appState.currentUser.current_points += CHECK_IN_REWARD;
     appState.currentUser.lifetime_points += CHECK_IN_REWARD;
@@ -838,6 +836,7 @@ window.performCheckIn = async () => {
 };
 
 window.completeChallenge = async (challengeId) => {
+    logActivity('button_click', { action: 'complete_challenge_attempt', challengeId });
     const challenge = appState.dailyChallenges.find(c => c.id == challengeId);
     if (!challenge || challenge.status === 'completed') {
         return;
@@ -870,6 +869,7 @@ window.completeChallenge = async (challengeId) => {
         return;
     }
 
+    logActivity('challenge_complete_success', { challengeId, points: challenge.points_reward });
     challenge.status = 'completed';
     appState.currentUser.current_points += challenge.points_reward;
     appState.currentUser.lifetime_points += challenge.points_reward;
@@ -899,7 +899,9 @@ window.showPage = (pageId) => {
     
     mainContent.scrollTop = 0;
     
-    // Refresh data just in time
+    // Log the page view
+    logActivity('page_view', { page: pageId });
+    
     if (pageId === 'my-rewards') renderMyRewardsPage();
     if (pageId === 'profile') renderProfile();
     if (pageId === 'ecopoints') renderEcoPointsPage();
@@ -907,13 +909,20 @@ window.showPage = (pageId) => {
     if (pageId === 'leaderboard') renderLeaderboardPage();
     if (pageId === 'rewards') renderRewards();
     if (pageId === 'challenges') renderChallengesPage();
-    if (pageId === 'events') renderEvents(); // <-- FIX: Added this line
-    if (pageId === 'dashboard') renderDashboard(); // <-- MODIFIED: Use the new renderDashboard function
+    if (pageId === 'events') renderEvents();
+    if (pageId === 'dashboard') renderDashboard();
+    if (pageId === 'change-password') {
+        // Reset the form when viewing the page
+        passwordMessage.textContent = '';
+        passwordMessage.className = 'text-sm text-center';
+        changePasswordForm.reset();
+    }
 
     toggleSidebar(true); 
 };
 
 window.showStoreDetailPage = (storeId) => {
+    logActivity('page_view', { page: 'store_detail', storeId });
     const store = appState.stores.find(s => s.id === storeId);
     if (!store) return;
     
@@ -946,7 +955,9 @@ window.showStoreDetailPage = (storeId) => {
     lucide.createIcons();
 };
 
+// --- MODIFIED: showProductDetailPage (A4 image, multiple images) ---
 window.showProductDetailPage = (storeId, productId) => {
+    logActivity('page_view', { page: 'product_detail', productId });
     const { store, product } = getProduct(storeId, productId);
     if (!product) return;
 
@@ -974,14 +985,41 @@ window.showProductDetailPage = (storeId, productId) => {
         }
     }
 
+    // --- NEW: Image Gallery Logic ---
+    let mainImage = (product.images && product.images.length > 0)
+        ? product.images[0]
+        : 'https://placehold.co/300x400/gray/white?text=No+Img';
+    
+    let thumbnailsHTML = '';
+    if (product.images && product.images.length > 1) {
+        product.images.forEach((img, index) => {
+            thumbnailsHTML += `
+                <button class="w-16 h-16 rounded-lg overflow-hidden border-2 ${index === 0 ? 'border-green-500' : 'border-transparent'}"
+                        onclick="document.getElementById('product-main-image').src='${img}'; 
+                                 this.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('border-green-500')); 
+                                 this.classList.add('border-green-500');">
+                    <img src="${img}" alt="thumbnail ${index + 1}" class="w-full h-full object-cover">
+                </button>
+            `;
+        });
+    }
+
     productDetailPage.innerHTML = `
         <div class="pb-24">
             <div class="relative">
-                <img src="${product.images ? product.images[0] : 'https://placehold.co/300x400/gray/white?text=No+Img'}" alt="${product.name}" class="w-full h-80 object-cover">
+                <img id="product-main-image" src="${mainImage}" alt="${product.name}" class="w-full h-96 object-cover bg-gray-200">
                 <button onclick="showStoreDetailPage('${store.id}')" class="absolute top-4 left-4 p-2 bg-white/80 rounded-full shadow-md text-gray-700">
                     <i data-lucide="arrow-left" class="w-6 h-6"></i>
                 </button>
             </div>
+            
+            ${thumbnailsHTML ? `
+            <div class="p-4 bg-white border-b">
+                <div class="flex space-x-3 overflow-x-auto horizontal-scroll">
+                    ${thumbnailsHTML}
+                </div>
+            </div>
+            ` : ''}
             
             <div class="p-6 bg-white">
                 <h2 class="text-3xl font-bold text-gray-800">${product.name}</h2>
@@ -1036,10 +1074,8 @@ window.toggleSidebar = (forceClose = false) => {
     }
 };
 
-// --- MODIFIED: updateEventRSVP ---
-// This function now works
 window.updateEventRSVP = async (eventId) => {
-    // Prevent double-clicking
+    logActivity('button_click', { action: 'rsvp_event_attempt', eventId });
     const hasRSVPd = appState.eventRsvps.some(rsvp => rsvp.event_id == eventId);
     if (hasRSVPd) return;
 
@@ -1057,15 +1093,14 @@ window.updateEventRSVP = async (eventId) => {
         return;
     }
 
-    // Add to local state for instant UI update
+    logActivity('rsvp_event_success', { eventId });
     appState.eventRsvps.push(data);
-    
-    // Re-render the events page and dashboard
     renderEvents();
     renderDashboard();
 };
 
 window.openPurchaseModal = (storeId, productId) => {
+    logActivity('button_click', { action: 'open_purchase_modal', productId });
     const { store, product } = getProduct(storeId, productId);
     if (!product) return;
 
@@ -1131,10 +1166,12 @@ window.closePurchaseModal = () => {
 };
 
 window.confirmPurchase = async (storeId, productId) => {
+    logActivity('button_click', { action: 'confirm_purchase_attempt', productId });
     const { product } = getProduct(storeId, productId);
     if (!product) return;
     
     if (appState.currentUser.current_points < product.cost_in_points) {
+        logActivity('purchase_attempt_failed', { productId, reason: 'insufficient_points' });
         purchaseModal.innerHTML = `
             <div class="text-center p-4">
                 <i data-lucide="x-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
@@ -1160,6 +1197,7 @@ window.confirmPurchase = async (storeId, productId) => {
         .single();
     
     if (rewardError) {
+        logActivity('purchase_attempt_failed', { productId, reason: rewardError.message });
         console.error("Error purchasing reward:", rewardError.message);
         return;
     }
@@ -1178,6 +1216,7 @@ window.confirmPurchase = async (storeId, productId) => {
         return;
     }
 
+    logActivity('purchase_attempt_success', { productId, points: -product.cost_in_points });
     appState.currentUser.current_points -= product.cost_in_points;
     appState.userRewards.unshift(newReward);
 
@@ -1205,6 +1244,7 @@ window.closePurchaseModalAndShowMyRewards = () => {
 };
 
 window.openRewardQrModal = (userRewardId) => {
+    logActivity('button_click', { action: 'open_qr_modal', userRewardId });
     const userReward = appState.userRewards.find(ur => ur.id == userRewardId);
     const rewardDetails = getRewardDetails(userReward); 
     if (!rewardDetails) return;
@@ -1253,6 +1293,7 @@ window.closeQrModal = () => {
 };
 
 window.markRewardAsUsed = async (userRewardId) => {
+    logActivity('button_click', { action: 'mark_reward_used_attempt', userRewardId });
     const userReward = appState.userRewards.find(ur => ur.id == userRewardId);
     if (!userReward || userReward.status === 'used') return;
 
@@ -1268,12 +1309,51 @@ window.markRewardAsUsed = async (userRewardId) => {
         return;
     }
 
+    logActivity('mark_reward_used_success', { userRewardId });
     userReward.status = 'used';
     userReward.used_date = usedDate;
     
     renderMyRewardsPage();
     closeQrModal();
 };
+
+// --- NEW: Handle Change Password ---
+async function handleChangePassword(event) {
+    event.preventDefault();
+    logActivity('button_click', { action: 'change_password_attempt' });
+    
+    changePasswordButton.disabled = true;
+    changePasswordButton.textContent = 'Updating...';
+    passwordMessage.textContent = '';
+    passwordMessage.className = 'text-sm text-center';
+
+    const newPassword = document.getElementById('new-password').value;
+    
+    if (newPassword.length < 6) {
+        passwordMessage.textContent = 'Password must be at least 6 characters.';
+        passwordMessage.classList.add('text-red-600');
+        changePasswordButton.disabled = false;
+        changePasswordButton.textContent = 'Update Password';
+        return;
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+    if (error) {
+        logActivity('change_password_failed', { error: error.message });
+        passwordMessage.textContent = `Error: ${error.message}`;
+        passwordMessage.classList.add('text-red-600');
+    } else {
+        logActivity('change_password_success');
+        passwordMessage.textContent = 'Password updated successfully!';
+        passwordMessage.classList.add('text-green-600');
+        changePasswordForm.reset();
+    }
+    
+    changePasswordButton.disabled = false;
+    changePasswordButton.textContent = 'Update Password';
+}
+
 
 // --- App Initialization ---
 
@@ -1298,12 +1378,15 @@ async function loadInitialData() {
         return;
     }
 
+    // Log the successful app load
+    logActivity('app_load_success');
+
     // Fetch all other data in parallel
     await Promise.all([
         fetchLeaderboard(),
         fetchHistory(),
         fetchChallenges(),
-        fetchEventsAndRSVPs(), // <-- MODIFIED
+        fetchEventsAndRSVPs(),
         fetchStoresAndProducts(),
         fetchUserRewards(),
         fetchLevels()
@@ -1316,20 +1399,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Add event listeners that are always present
     document.getElementById('sidebar-toggle-btn').addEventListener('click', () => toggleSidebar(false));
     logoutButton.addEventListener('click', async () => {
+        logActivity('logout'); // Log logout before signing out
         await supabase.auth.signOut();
         window.location.href = 'login.html';
     });
+    changePasswordForm.addEventListener('submit', handleChangePassword);
+
 
     const isLoggedIn = await checkAuth();
     if (!isLoggedIn) {
-        return;
+        return; // Stop execution, user is being redirected
     }
     
     await loadInitialData();
 
     // Initial Renders
     renderHeader();
-    renderDashboard(); // <-- This new function renders all dashboard components
+    renderDashboard();
     
     showPage('dashboard');
     lucide.createIcons(); 
