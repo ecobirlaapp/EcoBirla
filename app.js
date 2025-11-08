@@ -207,11 +207,11 @@ async function fetchUserProfile() {
 }
 
 async function fetchLeaderboard() {
+    
+    // MODIFIED: We now call the 'get_leaderboard' RPC function
     const { data, error } = await supabase
-        .from('students')
-        .select('student_id, name, avatar_url, lifetime_points')
-        .order('lifetime_points', { ascending: false })
-        .limit(10);
+        .rpc('get_leaderboard'); 
+        
     if (error) console.error("Error fetching leaderboard:", error.message);
     else appState.leaderboard = data;
 }
