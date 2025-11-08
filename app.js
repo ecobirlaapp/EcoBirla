@@ -4,14 +4,15 @@
 import { supabase } from './supabase-client.js';
 
 // --- Global App State ---
-// This object will be filled with data from Supabase
 let appState = {
-    currentUser: null,      // Will hold data from 'students' table
+    currentUser: null,
     leaderboard: [],
     history: [],
     dailyChallenges: [],
     events: [],
+    eventRsvps: [], // <-- NEW: To store user's RSVPs
     stores: [],
+    products: [], // <-- NEW: Added products to state
     userRewards: [],
     levels: [],
 };
@@ -37,6 +38,12 @@ const userPointsSidebar = document.getElementById('user-points-sidebar');
 const userLevelSidebar = document.getElementById('user-level-sidebar');
 
 const checkInCard = document.getElementById('daily-check-in-card');
+
+// --- NEW: Dashboard Element IDs ---
+const dashboardEventCard = document.getElementById('dashboard-event-card');
+const impactCo2 = document.getElementById('impact-co2');
+const impactRecycled = document.getElementById('impact-recycled');
+const impactEvents = document.getElementById('impact-events');
 
 const eventList = document.getElementById('event-list');
 const storeListPreview = document.getElementById('store-list-preview'); 
@@ -84,6 +91,7 @@ const getTodayDateString = () => {
     return new Date().toISOString().split('T')[0];
 };
 
+// Modified: Now reads from appState.products and appState.stores
 const getRewardDetails = (userReward) => {
      if (!userReward) return null;
     const product = appState.products.find(p => p.id === userReward.product_id);
@@ -102,6 +110,7 @@ const getRewardDetails = (userReward) => {
     };
 };
 
+// Modified: Now reads from appState.products and appState.stores
 const getProduct = (storeId, productId) => {
     const store = appState.stores.find(s => s.id === storeId);
     if (!store) return { store: null, product: null };
@@ -111,7 +120,7 @@ const getProduct = (storeId, productId) => {
 
 const getUserLevel = (points) => {
     if (!appState.levels || appState.levels.length === 0) {
-        return { level: 1, title: 'Loading...', progress: 0, progressText: '...' };
+        return { level: 1, title: 'Loading...', progress: 0, progressText: '...', color: 'text-gray-600', progressBg: 'bg-gray-500' };
     }
     
     let currentLevel = appState.levels[0];
@@ -124,11 +133,18 @@ const getUserLevel = (points) => {
     
     const nextLevel = appState.levels.find(l => l.level_number === currentLevel.level_number + 1);
 
+    // Find the color/bg from the level definitions (assuming you add them to your table)
+    const levelInfo = {
+        color: 'text-green-600', // Default
+        progressBg: 'bg-green-500' // Default
+    };
+
     if (nextLevel) {
         const pointsInLevel = points - currentLevel.min_points;
         const pointsForLevel = nextLevel.min_points - currentLevel.min_points;
         const progress = Math.max(0, Math.min(100, (pointsInLevel / pointsForLevel) * 100));
         return {
+            ...levelInfo,
             level: currentLevel.level_number,
             title: currentLevel.title,
             progress: progress,
@@ -137,6 +153,7 @@ const getUserLevel = (points) => {
     } else {
         // Max level
         return {
+            ...levelInfo,
             level: currentLevel.level_number,
             title: currentLevel.title,
             progress: 100,
@@ -150,7 +167,6 @@ const getUserLevel = (points) => {
 async function fetchUserProfile() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-        // This should not happen if checkAuth() is working, but as a fallback:
         window.location.href = 'login.html';
         return;
     }
@@ -171,7 +187,7 @@ async function fetchUserProfile() {
 async function fetchLeaderboard() {
     const { data, error } = await supabase
         .from('students')
-        .select('student_id, name, avatar_url, lifetime_points') // Use lifetime_points for rank
+        .select('student_id, name, avatar_url, lifetime_points')
         .order('lifetime_points', { ascending: false })
         .limit(10);
         
@@ -184,14 +200,13 @@ async function fetchHistory() {
         .from('points_history')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(20); // Fetch more for calculations
         
     if (error) console.error("Error fetching history:", error.message);
     else appState.history = data;
 }
 
 async function fetchChallenges() {
-    // 1. Fetch all challenges
     const { data: challenges, error: chalError } = await supabase
         .from('challenges')
         .select('*');
@@ -201,7 +216,6 @@ async function fetchChallenges() {
         return;
     }
 
-    // 2. Fetch today's completions for this user
     const today = getTodayDateString();
     const { data: completions, error: compError } = await supabase
         .from('challenge_completions')
@@ -213,7 +227,6 @@ async function fetchChallenges() {
         console.error("Error fetching completions:", compError.message);
     }
 
-    // 3. Merge the data
     const completedIds = completions ? completions.map(c => c.challenge_id) : [];
     appState.dailyChallenges = challenges.map(challenge => ({
         ...challenge,
@@ -221,20 +234,31 @@ async function fetchChallenges() {
     }));
 }
 
-async function fetchEvents() {
-    const { data, error } = await supabase.from('events').select('*');
-    if (error) console.error("Error fetching events:", error.message);
-    else appState.events = data;
+async function fetchEventsAndRSVPs() {
+    // Fetch events and RSVPs in parallel
+    const [eventsResult, rsvpsResult] = await Promise.all([
+        supabase.from('events').select('*').order('event_date', { ascending: true }),
+        supabase.from('event_rsvps').select('*').eq('student_id', appState.currentUser.student_id)
+    ]);
+
+    if (eventsResult.error) console.error("Error fetching events:", eventsResult.error.message);
+    else appState.events = eventsResult.data;
+    
+    if (rsvpsResult.error) console.error("Error fetching RSVPs:", rsvpsResult.error.message);
+    else appState.eventRsvps = rsvpsResult.data;
 }
 
 async function fetchStoresAndProducts() {
-    const { data: stores, error: storeError } = await supabase.from('stores').select('*');
-    if (storeError) console.error("Error fetching stores:", storeError.message);
-    else appState.stores = stores;
+    const [storesResult, productsResult] = await Promise.all([
+        supabase.from('stores').select('*'),
+        supabase.from('products').select('*')
+    ]);
+
+    if (storesResult.error) console.error("Error fetching stores:", storesResult.error.message);
+    else appState.stores = storesResult.data;
     
-    const { data: products, error: prodError } = await supabase.from('products').select('*');
-    if (prodError) console.error("Error fetching products:", prodError.message);
-    else appState.products = products;
+    if (productsResult.error) console.error("Error fetching products:", productsResult.error.message);
+    else appState.products = productsResult.data;
 }
 
 async function fetchUserRewards() {
@@ -261,11 +285,11 @@ async function fetchLevels() {
 
 const renderHeader = () => {
     const user = appState.currentUser;
-    if (!user) return; // Don't render if user isn't loaded
+    if (!user) return;
     
     const levelInfo = getUserLevel(user.lifetime_points); 
     userPointsHeader.textContent = user.current_points;
-    userNameGreeting.textContent = user.name.split(' ')[0]; 
+    userNameGreeting.textContent = user.name; // <-- MODIFIED: Show full name
     userAvatarSidebar.src = user.avatar_url || 'https://placehold.co/80x80/gray/white?text=User';
     userNameSidebar.textContent = user.name;
     userPointsSidebar.textContent = user.current_points;
@@ -307,9 +331,70 @@ const renderCheckInCard = () => {
     lucide.createIcons();
 };
 
+// --- NEW: Render Dashboard Function ---
+// This function populates all dynamic content on the dashboard
+const renderDashboard = () => {
+    const user = appState.currentUser;
+    if (!user) return;
+
+    // 1. Render Greeting
+    userNameGreeting.textContent = user.name; // Full name
+
+    // 2. Render Dynamic Event Card
+    const now = new Date();
+    const upcomingEvent = appState.events.find(e => new Date(e.event_date) > now);
+    
+    dashboardEventCard.innerHTML = ''; // Clear old content
+    if (upcomingEvent) {
+        dashboardEventCard.innerHTML = `
+            <div class="bg-gradient-to-r from-green-500 to-teal-500 text-white p-5 rounded-xl mb-6 shadow-lg">
+                <div class="flex items-center mb-2">
+                    <i data-lucide="calendar-check" class="w-5 h-5 mr-2"></i>
+                    <h3 class="font-bold">Upcoming Event</h3>
+                </div>
+                <p class="text-lg font-semibold mb-1">${upcomingEvent.title}</p>
+                <p class="text-sm opacity-90 mb-3">${upcomingEvent.description}</p>
+                <button onclick="showPage('events')" class="bg-white text-green-600 font-bold py-2 px-4 rounded-full text-sm hover:bg-green-50 transition-all">View Details</button>
+            </div>
+        `;
+    } else {
+        dashboardEventCard.innerHTML = `
+            <div class="bg-white text-gray-700 p-5 rounded-xl mb-6 shadow-sm">
+                <div class="flex items-center mb-2">
+                    <i data-lucide="calendar-off" class="w-5 h-5 mr-2"></i>
+                    <h3 class="font-bold">No Upcoming Events</h3>
+                </div>
+                <p class="text-sm opacity-90">Check back later for more events!</p>
+            </div>
+        `;
+    }
+    
+    // 3. Render Impact Stats
+    const co2Saved = (user.lifetime_points * 0.6).toFixed(1);
+    const recycledCount = appState.history.filter(item => item.description.toLowerCase().includes('plastic')).length;
+    const eventsCount = appState.history.filter(item => item.type === 'event').length;
+    
+    impactCo2.textContent = `${co2Saved} kg`;
+    impactRecycled.textContent = recycledCount;
+    impactEvents.textContent = eventsCount;
+    
+    // 4. Render other dashboard components
+    renderCheckInCard();
+    renderLeaderboardDashboard();
+    renderChallengesDashboard();
+    
+    lucide.createIcons(); // Re-initialize icons
+};
+
+
 const renderLeaderboardDashboard = () => {
     leaderboardDashboardList.innerHTML = '';
-    const sortedLeaderboard = appState.leaderboard; // Already sorted by query
+    const sortedLeaderboard = appState.leaderboard;
+    
+    if (!sortedLeaderboard || sortedLeaderboard.length === 0) {
+        leaderboardDashboardList.innerHTML = `<p class="text-center text-gray-500 text-sm p-4 bg-white rounded-xl shadow-sm">Leaderboard is empty.</p>`;
+        return;
+    }
     
     sortedLeaderboard.slice(0, 3).forEach((user, index) => {
         const rank = index + 1;
@@ -324,7 +409,7 @@ const renderLeaderboardDashboard = () => {
             <div class="flex items-center ${isCurrentUserClass} p-4 rounded-xl shadow-sm">
                 <div class="w-8 flex justify-center items-center mr-3">${rankBadge}</div>
                 <img src="${user.avatar_url || 'https://placehold.co/40x40/gray/white?text=User'}" class="w-10 h-10 rounded-full mr-3" alt="${user.name}">
-                <p class="font-semibold text-gray-700">${isCurrentUserClass ? 'You' : user.name}</p>
+                <p class="font-semibold text-gray-700">${user.student_id === appState.currentUser.student_id ? 'You' : user.name}</p>
                 <p class="ml-auto font-bold text-gray-600">${user.lifetime_points} Pts</p>
             </div>
         `;
@@ -335,6 +420,11 @@ const renderLeaderboardDashboard = () => {
 const renderLeaderboardPage = () => {
     leaderboardPageList.innerHTML = '';
     const sortedLeaderboard = appState.leaderboard;
+    
+    if (!sortedLeaderboard || sortedLeaderboard.length === 0) {
+        leaderboardPageList.innerHTML = `<p class="text-center text-gray-500 text-sm p-4 bg-white rounded-xl shadow-sm">Leaderboard is empty.</p>`;
+        return;
+    }
     
     sortedLeaderboard.forEach((user, index) => {
         const rank = index + 1;
@@ -349,7 +439,7 @@ const renderLeaderboardPage = () => {
             <div class="flex items-center ${isCurrentUserClass} p-4 rounded-xl shadow-sm">
                 <div class="w-8 flex justify-center items-center mr-3">${rankBadge}</div>
                 <img src="${user.avatar_url || 'https://placehold.co/40x40/gray/white?text=User'}" class="w-10 h-10 rounded-full mr-3" alt="${user.name}">
-                <p class="font-semibold text-gray-700">${isCurrentUserClass ? 'You' : user.name}</p>
+                <p class="font-semibold text-gray-700">${user.student_id === appState.currentUser.student_id ? 'You' : user.name}</p>
                 <p class="ml-auto font-bold text-gray-600">${user.lifetime_points} Pts</p>
             </div>
         `;
@@ -511,10 +601,12 @@ const renderEcoPointsPage = () => {
         historySummary.forEach(item => {
             const pointClass = item.points_change >= 0 ? 'text-green-600' : 'text-red-600';
             const sign = item.points_change >= 0 ? '+' : '';
+            const icon = item.type === 'reward-purchase' ? 'shopping-cart' : 
+                         item.type === 'check-in' ? 'log-in' : 'award';
             ecopointsRecentActivity.innerHTML += `
                 <div class="flex items-center">
                     <div class="p-2 bg-gray-100 rounded-lg mr-3">
-                        <i data-lucide="${item.type === 'reward-purchase' ? 'shopping-cart' : 'award'}" class="w-5 h-5 text-gray-600"></i>
+                        <i data-lucide="${icon}" class="w-5 h-5 text-gray-600"></i>
                     </div>
                     <div class="flex-grow">
                         <p class="font-semibold text-gray-800 text-sm">${item.description}</p>
@@ -530,7 +622,7 @@ const renderEcoPointsPage = () => {
 
 const renderHistory = () => {
     historyList.innerHTML = '';
-    const sortedHistory = appState.history; // Already sorted by query
+    const sortedHistory = appState.history;
     
     if (sortedHistory.length === 0) {
         historyList.innerHTML = `<p class="text-center text-gray-500">No activity yet.</p>`;
@@ -540,7 +632,8 @@ const renderHistory = () => {
         const pointClass = item.points_change >= 0 ? 'text-green-600' : 'text-red-600';
         const sign = item.points_change >= 0 ? '+' : '';
         const icon = item.type === 'reward-purchase' ? 'shopping-cart' : 
-                     item.type === 'check-in' ? 'log-in' : 'award';
+                     item.type === 'check-in' ? 'log-in' : 
+                     item.type === 'event' ? 'calendar-check' : 'award';
         
         historyList.innerHTML += `
             <div class="bg-white p-4 rounded-xl shadow-sm flex items-center">
@@ -561,15 +654,23 @@ const renderHistory = () => {
     lucide.createIcons();
 };
 
+// --- MODIFIED: renderEvents() ---
+// This function now correctly renders events and checks for RSVPs
 const renderEvents = () => {
     eventList.innerHTML = '';
-    // This is still static for now, as we don't have user's RSVPs
     const events = appState.events;
-    if (!events || events.length === 0) return;
+    if (!events || events.length === 0) {
+        eventList.innerHTML = `<p class="text-center text-gray-500">No upcoming events scheduled.</p>`;
+        return;
+    }
 
     events.forEach(e => {
-        // TODO: Add logic to check appState.eventRsvps
-        const rsvpButton = `<button onclick="updateEventRSVP('${e.id}')" class="bg-green-500 text-white font-bold py-2 px-4 rounded-lg text-sm hover:bg-green-600 w-full">RSVP Now</button>`;
+        // Check if the user has already RSVP'd
+        const hasRSVPd = appState.eventRsvps.some(rsvp => rsvp.event_id === e.id);
+        
+        const rsvpButton = hasRSVPd
+            ? `<button class="bg-gray-300 text-gray-600 font-bold py-2 px-4 rounded-lg text-sm w-full" disabled>Attending</button>`
+            : `<button onclick="updateEventRSVP(${e.id})" class="bg-green-500 text-white font-bold py-2 px-4 rounded-lg text-sm hover:bg-green-600 w-full">RSVP Now</button>`;
         
         eventList.innerHTML += `
             <div class="bg-white p-4 rounded-xl shadow-md">
@@ -578,7 +679,7 @@ const renderEvents = () => {
                         <i data-lucide="calendar" class="w-6 h-6 text-purple-600"></i>
                     </div>
                     <div class="flex-grow">
-                        <p class="text-xs font-semibold text-purple-600">${new Date(e.event_date).toLocaleDateString()}</p>
+                        <p class="text-xs font-semibold text-purple-600">${new Date(e.event_date).toLocaleString()}</p>
                         <h3 class="font-bold text-gray-800 text-lg">${e.title}</h3>
                         <p class="text-sm text-gray-500 mb-3">${e.description}</p>
                         <p class="text-sm font-bold text-green-600 mb-3">+${e.points_reward} EcoPoints for attending</p>
@@ -698,14 +799,12 @@ const renderMyRewardsPage = () => {
 
 // --- App Logic (Actions that write to Supabase) ---
 
-// Make functions global so inline HTML can call them
 window.performCheckIn = async () => {
     const today = getTodayDateString();
     if (appState.currentUser.last_check_in_date === today) {
         return; 
     }
 
-    // 1. Update the student's last_check_in_date
     const { error: updateError } = await supabase
         .from('students')
         .update({ last_check_in_date: today })
@@ -716,7 +815,6 @@ window.performCheckIn = async () => {
         return;
     }
 
-    // 2. Insert into points_history (this triggers the points update)
     const { error: pointsError } = await supabase
         .from('points_history')
         .insert({
@@ -731,24 +829,20 @@ window.performCheckIn = async () => {
         return;
     }
 
-    // 3. Update local state for instant UI change
     appState.currentUser.last_check_in_date = today;
     appState.currentUser.current_points += CHECK_IN_REWARD;
     appState.currentUser.lifetime_points += CHECK_IN_REWARD;
 
-    // 4. Re-render
     renderCheckInCard();
     renderHeader(); 
 };
 
 window.completeChallenge = async (challengeId) => {
-    // Find the challenge from appState
     const challenge = appState.dailyChallenges.find(c => c.id == challengeId);
     if (!challenge || challenge.status === 'completed') {
         return;
     }
 
-    // 1. Insert into challenge_completions
     const { error: compError } = await supabase
         .from('challenge_completions')
         .insert({
@@ -762,7 +856,6 @@ window.completeChallenge = async (challengeId) => {
         return;
     }
 
-    // 2. Insert into points_history (this triggers the points update)
     const { error: pointsError } = await supabase
         .from('points_history')
         .insert({
@@ -774,15 +867,13 @@ window.completeChallenge = async (challengeId) => {
 
     if (pointsError) {
         console.error("Error logging challenge points:", pointsError.message);
-        // Note: You might want to "roll back" the completion here, but for now we'll continue
+        return;
     }
 
-    // 3. Update local state for instant UI change
     challenge.status = 'completed';
     appState.currentUser.current_points += challenge.points_reward;
     appState.currentUser.lifetime_points += challenge.points_reward;
 
-    // 4. Re-render
     renderHeader();
     renderChallengesPage();
     renderChallengesDashboard(); 
@@ -808,8 +899,7 @@ window.showPage = (pageId) => {
     
     mainContent.scrollTop = 0;
     
-    // Re-fetch data or just re-render?
-    // For now, just re-render. You can add data-fetching logic here if needed.
+    // Refresh data just in time
     if (pageId === 'my-rewards') renderMyRewardsPage();
     if (pageId === 'profile') renderProfile();
     if (pageId === 'ecopoints') renderEcoPointsPage();
@@ -817,11 +907,8 @@ window.showPage = (pageId) => {
     if (pageId === 'leaderboard') renderLeaderboardPage();
     if (pageId === 'rewards') renderRewards();
     if (pageId === 'challenges') renderChallengesPage();
-    if (pageId === 'dashboard') {
-        renderCheckInCard();
-        renderLeaderboardDashboard();
-        renderChallengesDashboard();
-    }
+    if (pageId === 'events') renderEvents(); // <-- FIX: Added this line
+    if (pageId === 'dashboard') renderDashboard(); // <-- MODIFIED: Use the new renderDashboard function
 
     toggleSidebar(true); 
 };
@@ -949,11 +1036,33 @@ window.toggleSidebar = (forceClose = false) => {
     }
 };
 
-window.updateEventRSVP = async (id) => {
-    // TODO: Implement this by inserting into `event_rsvps` table
-    console.log("RSVP to event:", id);
-    // 1. Insert into event_rsvps
-    // 2. Re-render events page
+// --- MODIFIED: updateEventRSVP ---
+// This function now works
+window.updateEventRSVP = async (eventId) => {
+    // Prevent double-clicking
+    const hasRSVPd = appState.eventRsvps.some(rsvp => rsvp.event_id == eventId);
+    if (hasRSVPd) return;
+
+    const { data, error } = await supabase
+        .from('event_rsvps')
+        .insert({
+            event_id: eventId,
+            student_id: appState.currentUser.student_id
+        })
+        .select()
+        .single();
+    
+    if (error) {
+        console.error("Error creating RSVP:", error.message);
+        return;
+    }
+
+    // Add to local state for instant UI update
+    appState.eventRsvps.push(data);
+    
+    // Re-render the events page and dashboard
+    renderEvents();
+    renderDashboard();
 };
 
 window.openPurchaseModal = (storeId, productId) => {
@@ -1026,7 +1135,6 @@ window.confirmPurchase = async (storeId, productId) => {
     if (!product) return;
     
     if (appState.currentUser.current_points < product.cost_in_points) {
-        // Not enough points
         purchaseModal.innerHTML = `
             <div class="text-center p-4">
                 <i data-lucide="x-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
@@ -1041,7 +1149,6 @@ window.confirmPurchase = async (storeId, productId) => {
         return;
     }
 
-    // 1. Insert into user_rewards
     const { data: newReward, error: rewardError } = await supabase
         .from('user_rewards')
         .insert({
@@ -1057,27 +1164,23 @@ window.confirmPurchase = async (storeId, productId) => {
         return;
     }
 
-    // 2. Insert into points_history (triggers points update)
     const { error: pointsError } = await supabase
         .from('points_history')
         .insert({
             student_id: appState.currentUser.student_id,
-            points_change: -product.cost_in_points, // Note the negative sign
+            points_change: -product.cost_in_points,
             description: `Purchased: ${product.name}`,
             type: 'reward-purchase'
         });
     
     if (pointsError) {
         console.error("Error logging purchase points:", pointsError.message);
-        // TODO: You might want to delete the user_reward here if this fails
         return;
     }
 
-    // 3. Update local state
     appState.currentUser.current_points -= product.cost_in_points;
     appState.userRewards.unshift(newReward);
 
-    // 4. Show success in modal
     purchaseModal.innerHTML = `
         <div class="text-center p-4">
             <i data-lucide="check-circle" class="w-16 h-16 text-green-500 mx-auto mb-4"></i>
@@ -1093,7 +1196,6 @@ window.confirmPurchase = async (storeId, productId) => {
     `;
     lucide.createIcons();
     
-    // 5. Re-render header
     renderHeader();
 };
 
@@ -1178,18 +1280,15 @@ window.markRewardAsUsed = async (userRewardId) => {
 async function checkAuth() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
-        // No user logged in, redirect to login page
         window.location.href = 'login.html';
         return false;
     }
-    return true; // User is logged in
+    return true;
 }
 
 async function loadInitialData() {
-    // Show loading spinner
     appLoading.style.display = 'flex';
 
-    // Fetch user profile first, as other queries depend on it
     await fetchUserProfile();
     
     if (!appState.currentUser) {
@@ -1199,18 +1298,17 @@ async function loadInitialData() {
         return;
     }
 
-    // Fetch all other data in parallel for performance
+    // Fetch all other data in parallel
     await Promise.all([
         fetchLeaderboard(),
         fetchHistory(),
         fetchChallenges(),
-        fetchEvents(),
+        fetchEventsAndRSVPs(), // <-- MODIFIED
         fetchStoresAndProducts(),
         fetchUserRewards(),
         fetchLevels()
     ]);
     
-    // Hide loading spinner
     appLoading.style.display = 'none';
 }
 
@@ -1222,22 +1320,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.location.href = 'login.html';
     });
 
-    // Check if user is logged in
     const isLoggedIn = await checkAuth();
     if (!isLoggedIn) {
-        return; // Stop execution, user is being redirected
+        return;
     }
     
-    // User is logged in, load all app data
     await loadInitialData();
 
     // Initial Renders
     renderHeader();
-    renderLeaderboardDashboard();
-    renderChallengesDashboard();
-    renderCheckInCard(); 
+    renderDashboard(); // <-- This new function renders all dashboard components
     
-    // Show the dashboard as the default page
     showPage('dashboard');
-    lucide.createIcons(); // Initialize icons one last time
+    lucide.createIcons(); 
 });
