@@ -48,7 +48,7 @@
         </nav>
 
         <div class="p-4">
-            <button class="w-full bg-red-100 text-red-700 font-bold py-3 px-4 rounded-lg hover:bg-red-200 transition-colors flex items-center justify-center">
+            <button id="logout-button" class="w-full bg-red-100 text-red-700 font-bold py-3 px-4 rounded-lg hover:bg-red-200 transition-colors flex items-center justify-center">
                 <i data-lucide="log-out" class="w-5 h-5 mr-2"></i>
                 <span>Log Out</span>
             </button>
@@ -84,8 +84,15 @@
         </header>
 
         <main class="main-content bg-gray-50"> 
+            
+            <div id="app-loading" class="flex items-center justify-center h-full p-6">
+                <div class="text-center">
+                    <i data-lucide="leaf" class="w-12 h-12 text-green-600 animate-spin mx-auto"></i>
+                    <p class="text-lg font-semibold text-gray-600 mt-4">Loading EcoBirla...</p>
+                </div>
+            </div>
 
-            <div id="dashboard" class="page active p-6">
+            <div id="dashboard" class="page p-6">
                 <div class="mb-8">
                     <h2 class="text-3xl font-bold text-gray-900">Hi, <span id="user-name-greeting"></span>!</h2>
                     <p class="text-lg text-gray-600">Let's make our campus greener today.</p>
@@ -430,6 +437,6 @@
     <div id="qr-modal" class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white rounded-t-2xl shadow-lg z-50 p-6 transform translate-y-full transition-transform duration-300 ease-in-out">
     </div>
 
-    <script src="app.js" defer></script>
+    <script src="app.js" type="module" defer></script>
 </body>
 </html>
