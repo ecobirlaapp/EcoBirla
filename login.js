@@ -21,36 +21,41 @@ async function checkAuth() {
 // Run the check on page load
 checkAuth();
 
+
 // --- 2. Handle Login Form Submission ---
 loginForm.addEventListener('submit', async (e) => {
     e.preventDefault(); // Prevent the form from submitting normally
     
     setLoading(true);
+    hideError(); // Hide old errors
     
     const studentId = studentIdInput.value.trim();
     const password = passwordInput.value;
 
     try {
-        // --- This is the key logic ---
-        // Step 1: Look up the student's email using their Student ID.
-        // This query works because RLS is NOT enabled for 'SELECT' on public tables,
-        // or you have a public read policy.
+        // --- THIS IS THE UPDATED LOGIC ---
         
-        // ** IMPORTANT **: If you restricted read access on `students`,
-        // you must create an RPC function for this.
-        const { data: student, error: idError } = await supabase
-            .from('students')
-            .select('email')
-            .eq('student_id', studentId)
-            .single();
+        // Step 1: Securely call the RPC function to get the email.
+        const { data: userEmail, error: rpcError } = await supabase
+            .rpc('get_email_for_student_id', {
+                p_student_id: studentId
+            });
 
-        if (idError || !student) {
+        if (rpcError) {
+            // A database-level error occurred
+            throw new Error(rpcError.message);
+        }
+
+        if (!userEmail) {
+            // The function ran but returned null (no student found)
             throw new Error("Invalid Student ID.");
         }
+        
+        // --- END OF UPDATED LOGIC ---
 
         // Step 2: Use the found email to log the user in with Supabase Auth.
         const { error: loginError } = await supabase.auth.signInWithPassword({
-            email: student.email,
+            email: userEmail,
             password: password,
         });
 
@@ -84,4 +89,9 @@ function setLoading(isLoading) {
 function showError(message) {
     errorMessage.textContent = message;
     errorMessage.classList.remove('hidden');
+}
+
+function hideError() {
+    errorMessage.classList.add('hidden');
+    errorMessage.textContent = '';
 }
