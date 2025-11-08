@@ -84,7 +84,6 @@ const qrModal = document.getElementById('qr-modal');
 
 const allRewardsList = document.getElementById('all-rewards-list');
 
-// --- NEW: Change Password Form Elements ---
 const changePasswordForm = document.getElementById('change-password-form');
 const changePasswordButton = document.getElementById('change-password-button');
 const passwordMessage = document.getElementById('password-message');
@@ -103,17 +102,21 @@ async function logActivity(activity_type, details = {}) {
     try {
         if (!appState.currentUser) return; // Don't log if user isn't loaded
 
-        const { error } = await supabase
+        // We don't await this, so it runs in the background
+        // and doesn't slow down the UI.
+        supabase
             .from('activity_log')
             .insert({
                 student_id: appState.currentUser.student_id,
                 activity_type,
                 details
+            })
+            .then(({ error }) => {
+                if (error) {
+                    console.warn("Error logging activity:", error.message);
+                }
             });
         
-        if (error) {
-            console.warn("Error logging activity:", error.message);
-        }
     } catch (err) {
         console.warn("Failed to log activity:", err);
     }
@@ -330,7 +333,7 @@ const renderCheckInCard = () => {
     lucide.createIcons();
 };
 
-// --- MODIFIED: renderDashboard (now calculates impact stats) ---
+// --- MODIFIED: renderDashboard (calculates stats, shows event) ---
 const renderDashboard = () => {
     const user = appState.currentUser;
     if (!user) return;
@@ -501,6 +504,7 @@ const renderChallengesDashboard = () => {
     lucide.createIcons();
 };
 
+// --- MODIFIED: renderProfile (formats date) ---
 const renderProfile = () => {
     const user = appState.currentUser;
     if (!user) return;
@@ -510,8 +514,8 @@ const renderProfile = () => {
     profileAvatar.src = user.avatar_url || 'https://placehold.co/80x80/gray/white?text=User';
     profileName.textContent = user.name;
     profileEmail.textContent = user.email;
-    // --- MODIFIED: Date format ---
-    profileJoined.textContent = `Joined ${new Date(user.joined_at).toLocaleDateString('en-GB')}`; // dd/mm/yyyy
+    // Format: dd/mm/yyyy
+    profileJoined.textContent = `Joined ${new Date(user.joined_at).toLocaleDateString('en-GB')}`;
     
     profileLevelTitle.textContent = levelInfo.title;
     profileLevelTitle.className = `text-sm font-semibold ${levelInfo.color || 'text-gray-600'}`;
@@ -564,6 +568,21 @@ const renderEcoPointsPage = () => {
     ecopointsLevelProgress.className = `h-2.5 rounded-full ${levelInfo.progressBg || 'bg-gray-500'}`; 
     ecopointsLevelNext.textContent = levelInfo.progressText;
 
+    // This updates the static text on the level chart
+    const levelSteps = [
+        { id: 'level-step-1', points: '0 - 1000 Pts' },
+        { id: 'level-step-2', points: '1001 - 2000 Pts' },
+        { id: 'level-step-3', points: '2001 - 4000 Pts' },
+        { id: 'level-step-4', points: '4000+ Pts' }
+    ];
+
+    levelSteps.forEach(step => {
+        const stepEl = document.getElementById(step.id);
+        if (stepEl) {
+            stepEl.querySelector('.text-sm.font-semibold').textContent = step.points;
+        }
+    });
+
     appState.levels.forEach((level) => {
         const stepEl = document.getElementById(`level-step-${level.level_number}`);
         if (!stepEl) return;
@@ -587,8 +606,10 @@ const renderEcoPointsPage = () => {
         }
     });
     
-    const totalProgressPercent = ((levelInfo.level - 1) + (levelInfo.progress / 100)) / (appState.levels.length - 1) * 100;
-    levelLineProgress.style.height = `${totalProgressPercent}%`;
+    if (appState.levels.length > 0) {
+        const totalProgressPercent = ((levelInfo.level - 1) + (levelInfo.progress / 100)) / (appState.levels.length - 1) * 100;
+        levelLineProgress.style.height = `${totalProgressPercent}%`;
+    }
 
     ecopointsRecentActivity.innerHTML = '';
     const historySummary = appState.history.slice(0, 3);
@@ -608,7 +629,7 @@ const renderEcoPointsPage = () => {
                     </div>
                     <div class="flex-grow">
                         <p class="font-semibold text-gray-800 text-sm">${item.description}</p>
-                        <p class="text-xs text-gray-500">${new Date(item.created_at).toLocaleDateString()}</p>
+                        <p class="text-xs text-gray-500">${new Date(item.created_at).toLocaleDateString('en-GB')}</p>
                     </div>
                     <p class="font-bold text-sm ${pointClass}">${sign}${item.points_change}</p>
                 </div>
@@ -640,7 +661,7 @@ const renderHistory = () => {
                 </div>
                 <div class="flex-grow">
                     <p class="font-semibold text-gray-800">${item.description}</p>
-                    <p class="text-xs text-gray-500">${new Date(item.created_at).toLocaleDateString()}</p>
+                    <p class="text-xs text-gray-500">${new Date(item.created_at).toLocaleDateString('en-GB')}</p>
                 </div>
                 <div class="text-right">
                     <p class="font-bold ${pointClass}">${sign}${item.points_change}</p>
@@ -674,7 +695,7 @@ const renderEvents = () => {
                         <i data-lucide="calendar" class="w-6 h-6 text-purple-600"></i>
                     </div>
                     <div class="flex-grow">
-                        <p class="text-xs font-semibold text-purple-600">${new Date(e.event_date).toLocaleString()}</p>
+                        <p class="text-xs font-semibold text-purple-600">${new Date(e.event_date).toLocaleString('en-GB')}</p>
                         <h3 class="font-bold text-gray-800 text-lg">${e.title}</h3>
                         <p class="text-sm text-gray-500 mb-3">${e.description}</p>
                         <p class="text-sm font-bold text-green-600 mb-3">+${e.points_reward} EcoPoints for attending</p>
@@ -763,7 +784,7 @@ const renderMyRewardsPage = () => {
                         <div class="p-4 flex-grow flex flex-col">
                             <h3 class="font-bold text-gray-800">${rewardDetails.name}</h3>
                             <p class="text-sm text-gray-500">${rewardDetails.storeName}</p>
-                            <p class="text-xs text-gray-400 mb-2 mt-1">Purchased: ${new Date(rewardDetails.purchaseDate).toLocaleDateString()}</p>
+                            <p class="text-xs text-gray-400 mb-2 mt-1">Purchased: ${new Date(rewardDetails.purchaseDate).toLocaleDateString('en-GB')}</p>
                             <button onclick="openRewardQrModal('${userReward.id}')" class="mt-auto w-full bg-green-500 text-white font-bold py-2 px-4 rounded-lg text-sm hover:bg-green-600">
                                 Use Now
                             </button>
@@ -777,8 +798,8 @@ const renderMyRewardsPage = () => {
                         <div class="p-4 flex-grow">
                             <h3 class="font-bold text-gray-800">${rewardDetails.name}</h3>
                             <p class="text-sm text-gray-500">${rewardDetails.storeName}</p>
-                            <p class="text-xs text-gray-400 mt-1">Purchased: ${new Date(rewardDetails.purchaseDate).toLocaleDateString()}</p>
-                            <p class="text-xs text-gray-500 font-semibold">Used: ${new Date(rewardDetails.usedDate).toLocaleDateString()}</p>
+                            <p class="text-xs text-gray-400 mt-1">Purchased: ${new Date(rewardDetails.purchaseDate).toLocaleDateString('en-GB')}</p>
+                            <p class="text-xs text-gray-500 font-semibold">Used: ${new Date(rewardDetails.usedDate).toLocaleDateString('en-GB')}</p>
                             <div class="mt-2 w-full bg-gray-200 text-gray-500 font-bold py-2 px-4 rounded-lg text-sm text-center">
                                 Redeemed
                             </div>
@@ -794,7 +815,6 @@ const renderMyRewardsPage = () => {
 
 // --- App Logic (Actions that write to Supabase) ---
 
-// Make functions global so inline HTML can call them
 window.performCheckIn = async () => {
     logActivity('button_click', { action: 'perform_check_in_attempt' });
     const today = getTodayDateString();
@@ -830,9 +850,13 @@ window.performCheckIn = async () => {
     appState.currentUser.last_check_in_date = today;
     appState.currentUser.current_points += CHECK_IN_REWARD;
     appState.currentUser.lifetime_points += CHECK_IN_REWARD;
+    appState.history.unshift({ 
+        ... (await supabase.from('points_history').select('*').order('created_at', { ascending: false }).limit(1)).data[0] 
+    }); // Quick refresh of history
 
     renderCheckInCard();
     renderHeader(); 
+    renderDashboard(); // Re-render dashboard for stats
 };
 
 window.completeChallenge = async (challengeId) => {
@@ -873,6 +897,9 @@ window.completeChallenge = async (challengeId) => {
     challenge.status = 'completed';
     appState.currentUser.current_points += challenge.points_reward;
     appState.currentUser.lifetime_points += challenge.points_reward;
+    appState.history.unshift({ 
+        ... (await supabase.from('points_history').select('*').order('created_at', { ascending: false }).limit(1)).data[0] 
+    });
 
     renderHeader();
     renderChallengesPage();
@@ -899,7 +926,6 @@ window.showPage = (pageId) => {
     
     mainContent.scrollTop = 0;
     
-    // Log the page view
     logActivity('page_view', { page: pageId });
     
     if (pageId === 'my-rewards') renderMyRewardsPage();
@@ -909,10 +935,9 @@ window.showPage = (pageId) => {
     if (pageId === 'leaderboard') renderLeaderboardPage();
     if (pageId === 'rewards') renderRewards();
     if (pageId === 'challenges') renderChallengesPage();
-    if (pageId === 'events') renderEvents();
+    if (pageId === 'events') renderEvents(); // <-- FIX
     if (pageId === 'dashboard') renderDashboard();
     if (pageId === 'change-password') {
-        // Reset the form when viewing the page
         passwordMessage.textContent = '';
         passwordMessage.className = 'text-sm text-center';
         changePasswordForm.reset();
@@ -985,7 +1010,6 @@ window.showProductDetailPage = (storeId, productId) => {
         }
     }
 
-    // --- NEW: Image Gallery Logic ---
     let mainImage = (product.images && product.images.length > 0)
         ? product.images[0]
         : 'https://placehold.co/300x400/gray/white?text=No+Img';
@@ -1007,7 +1031,7 @@ window.showProductDetailPage = (storeId, productId) => {
     productDetailPage.innerHTML = `
         <div class="pb-24">
             <div class="relative">
-                <img id="product-main-image" src="${mainImage}" alt="${product.name}" class="w-full h-96 object-cover bg-gray-200">
+                <img id="product-main-image" src="${mainImage}" alt="${product.name}" class="w-full h-[32rem] object-cover bg-gray-200">
                 <button onclick="showStoreDetailPage('${store.id}')" class="absolute top-4 left-4 p-2 bg-white/80 rounded-full shadow-md text-gray-700">
                     <i data-lucide="arrow-left" class="w-6 h-6"></i>
                 </button>
@@ -1378,7 +1402,6 @@ async function loadInitialData() {
         return;
     }
 
-    // Log the successful app load
     logActivity('app_load_success');
 
     // Fetch all other data in parallel
@@ -1399,7 +1422,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Add event listeners that are always present
     document.getElementById('sidebar-toggle-btn').addEventListener('click', () => toggleSidebar(false));
     logoutButton.addEventListener('click', async () => {
-        logActivity('logout'); // Log logout before signing out
+        logActivity('logout');
         await supabase.auth.signOut();
         window.location.href = 'login.html';
     });
@@ -1408,7 +1431,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const isLoggedIn = await checkAuth();
     if (!isLoggedIn) {
-        return; // Stop execution, user is being redirected
+        return;
     }
     
     await loadInitialData();
