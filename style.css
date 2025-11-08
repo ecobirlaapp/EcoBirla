@@ -1,0 +1,74 @@
+html, body {
+    height: 100%;
+    overflow: hidden; 
+}
+body {
+    font-family: 'Inter', sans-serif;
+    -webkit-tap-highlight-color: transparent;
+}
+.app-container {
+    max-width: 420px;
+    margin: auto;
+    height: 100%; 
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow-x: hidden;
+}
+
+header, nav {
+    flex-shrink: 0; 
+}
+.main-content { 
+    flex-grow: 1; 
+    overflow-y: auto; 
+    overflow-x: hidden;
+}
+
+.page { display: none; animation: fadeIn 0.3s ease-in-out; }
+.page.active { display: block; }
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+#sidebar {
+    transition: transform 0.3s ease-in-out;
+}
+#sidebar-overlay {
+    transition: opacity 0.3s ease-in-out;
+}
+
+.sidebar-nav-item.active {
+    background-color: #ECFDF5; 
+    color: #059669; 
+    font-weight: 600;
+}
+.sidebar-nav-item.active svg { color: #059669; }
+
+.nav-item.active { color: #10B981; }
+.nav-item.active svg { color: #10B981; }
+
+.toggle-checkbox:checked {
+    right: 0;
+    border-color: #10B981;
+}
+.toggle-checkbox:checked + .toggle-label {
+    background-color: #10B981;
+}
+
+.level-text-content {
+    transition: opacity 0.3s ease;
+}
+.level-number-container span {
+    transition: all 0.3s ease;
+    transform-origin: center;
+}
+
+.horizontal-scroll {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+}
+.horizontal-scroll::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+}
