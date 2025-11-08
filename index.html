@@ -42,10 +42,7 @@
             <button onclick="showPage('help')" class="sidebar-nav-item w-full flex items-center p-3 rounded-lg text-gray-700 hover:bg-gray-100">
                 <i data-lucide="help-circle" class="w-5 h-5 mr-3"></i>Help & Support
             </button>
-            <button onclick="showPage('settings')" class="sidebar-nav-item w-full flex items-center p-3 rounded-lg text-gray-700 hover:bg-gray-100">
-                <i data-lucide="settings" class="w-5 h-5 mr-3"></i>Settings
-            </button>
-        </nav>
+            </nav>
 
         <div class="p-4">
             <button id="logout-button" class="w-full bg-red-100 text-red-700 font-bold py-3 px-4 rounded-lg hover:bg-red-200 transition-colors flex items-center justify-center">
@@ -98,15 +95,8 @@
                     <p class="text-lg text-gray-600">Let's make our campus greener today.</p>
                 </div>
                 
-                <div class="bg-gradient-to-r from-green-500 to-teal-500 text-white p-5 rounded-xl mb-6 shadow-lg">
-                    <div class="flex items-center mb-2">
-                        <i data-lucide="calendar-check" class="w-5 h-5 mr-2"></i>
-                        <h3 class="font-bold">Upcoming Event</h3>
+                <div id="dashboard-event-card" class="mb-6">
                     </div>
-                    <p class="text-lg font-semibold mb-1">Community Park Cleanup</p>
-                    <p class="text-sm opacity-90 mb-3">Join us this Saturday to make our local park greener. Earn bonus points!</p>
-                    <button onclick="showPage('events')" class="bg-white text-green-600 font-bold py-2 px-4 rounded-full text-sm hover:bg-green-50 transition-all">View Details</button>
-                </div>
 
                 <div id="daily-check-in-card" class="mb-6">
                     </div>
@@ -115,17 +105,17 @@
                 <div class="grid grid-cols-3 gap-4 mb-8">
                     <div class="bg-white p-4 rounded-xl shadow-sm text-center">
                         <i data-lucide="leaf" class="w-8 h-8 text-green-500 mx-auto mb-2"></i>
-                        <p class="font-bold text-lg">12 kg</p>
+                        <p id="impact-co2" class="font-bold text-lg">0 kg</p>
                         <p class="text-xs text-gray-500">CO2 Saved</p>
                     </div>
                     <div class="bg-white p-4 rounded-xl shadow-sm text-center">
                         <i data-lucide="recycle" class="w-8 h-8 text-blue-500 mx-auto mb-2"></i>
-                        <p class="font-bold text-lg">45</p>
+                        <p id="impact-recycled" class="font-bold text-lg">0</p>
                         <p class="text-xs text-gray-500">Recycled</p>
                     </div>
                     <div class="bg-white p-4 rounded-xl shadow-sm text-center">
                         <i data-lucide="calendar-check" class="w-8 h-8 text-purple-500 mx-auto mb-2"></i>
-                        <p class="font-bold text-lg">2</p>
+                        <p id="impact-events" class="font-bold text-lg">0</p>
                         <p class="text-xs text-gray-500">Events</p>
                     </div>
                 </div>
@@ -214,7 +204,7 @@
             <div id="leaderboard" class="page p-6">
                 <h2 class="text-3xl font-bold text-gray-900 mb-6">Top Champions</h2>
                 <div id="leaderboard-page-list" class="space-y-3">
-                </div>
+                    </div>
             </div>
             
             <div id="challenges" class="page p-6">
@@ -323,14 +313,14 @@
                         <button onclick="showPage('history')" class="text-sm font-semibold text-green-600 hover:text-green-700">View All</button>
                     </div>
                     <div id="ecopoints-recent-activity" class="space-y-3">
-                    </div>
+                        </div>
                 </div>
             </div>
 
             <div id="events" class="page p-6">
                 <h2 class="text-3xl font-bold text-gray-900 mb-6">Upcoming Events</h2>
                 <div id="event-list" class="space-y-4">
-                </div>
+                    </div>
             </div>
 
             <div id="rewards" class="page p-6">
@@ -354,7 +344,7 @@
             <div id="history" class="page p-6">
                 <h2 class="text-3xl font-bold text-gray-900 mb-6">Activity History</h2>
                 <div id="history-list" class="space-y-3">
-                </div>
+                    </div>
             </div>
             
             <div id="about" class="page p-6">
