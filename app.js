@@ -17,6 +17,10 @@ let appState = {
     levels: [],
 };
 
+// --- Cloudinary Config ---
+const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/dnia8lb2q/image/upload';
+const CLOUDINARY_PRESET = 'EcoBirla_avatars';
+
 const CHECK_IN_REWARD = 10;
 
 // --- DOM Elements ---
@@ -68,6 +72,9 @@ const profileCourse = document.getElementById('profile-course');
 const profileMobile = document.getElementById('profile-mobile');
 const profileEmailPersonal = document.getElementById('profile-email-personal');
 const profileMembership = document.getElementById('profile-membership');
+const profilePicUpload = document.getElementById('profile-pic-upload');
+const profilePicLoader = document.getElementById('profile-pic-loader');
+const profilePicError = document.getElementById('profile-pic-error');
 
 const ecopointsBalance = document.getElementById('ecopoints-balance'); 
 const ecopointsLevelTitle = document.getElementById('ecopoints-level-title'); 
@@ -88,6 +95,11 @@ const changePasswordForm = document.getElementById('change-password-form');
 const changePasswordButton = document.getElementById('change-password-button');
 const passwordMessage = document.getElementById('password-message');
 
+// Theme Toggle Elements
+const themeToggleBtn = document.getElementById('theme-toggle-btn');
+const themeIcon = document.getElementById('theme-icon');
+const themeText = document.getElementById('theme-text');
+
 // --- Helper Functions ---
 
 const getTodayDateString = () => {
@@ -95,7 +107,7 @@ const getTodayDateString = () => {
 };
 
 /**
- * NEW: Activity Logging Function
+ * Activity Logging Function
  * Logs user interactions to the 'activity_log' table without waiting.
  */
 async function logActivity(activity_type, details = {}) {
@@ -149,7 +161,7 @@ const getProduct = (storeId, productId) => {
 
 const getUserLevel = (points) => {
     if (!appState.levels || appState.levels.length === 0) {
-        return { level: 1, title: 'Loading...', progress: 0, progressText: '...', color: 'text-gray-600', progressBg: 'bg-gray-500' };
+        return { level: 1, title: 'Loading...', progress: 0, progressText: '...', color: 'text-gray-600 dark:text-gray-400', progressBg: 'bg-gray-500' };
     }
     
     let currentLevel = appState.levels[0];
@@ -163,7 +175,7 @@ const getUserLevel = (points) => {
     const nextLevel = appState.levels.find(l => l.level_number === currentLevel.level_number + 1);
 
     const levelInfo = {
-        color: 'text-green-600',
+        color: 'text-green-600 dark:text-green-400',
         progressBg: 'bg-green-500'
     };
 
@@ -217,15 +229,18 @@ async function fetchLeaderboard() {
 }
 
 async function fetchHistory() {
+    if (!appState.currentUser) return;
     const { data, error } = await supabase
         .from('points_history')
         .select('*')
-        .order('created_at', { ascending: false }); // Fetch all history
+        .eq('student_id', appState.currentUser.student_id) // Fetch only current user's history
+        .order('created_at', { ascending: false });
     if (error) console.error("Error fetching history:", error.message);
     else appState.history = data;
 }
 
 async function fetchChallenges() {
+    if (!appState.currentUser) return;
     const { data: challenges, error: chalError } = await supabase.from('challenges').select('*');
     if (chalError) {
         console.error("Error fetching challenges:", chalError.message);
@@ -246,8 +261,14 @@ async function fetchChallenges() {
 }
 
 async function fetchEventsAndRSVPs() {
+    if (!appState.currentUser) return;
+    // MODIFICATION: Fetch only upcoming events
+    const today = new Date().toISOString();
+    
     const [eventsResult, rsvpsResult] = await Promise.all([
-        supabase.from('events').select('*').order('event_date', { ascending: true }),
+        supabase.from('events').select('*')
+            .gte('event_date', today) // Only get events from today onwards
+            .order('event_date', { ascending: true }),
         supabase.from('event_rsvps').select('*').eq('student_id', appState.currentUser.student_id)
     ]);
     if (eventsResult.error) console.error("Error fetching events:", eventsResult.error.message);
@@ -268,9 +289,11 @@ async function fetchStoresAndProducts() {
 }
 
 async function fetchUserRewards() {
+    if (!appState.currentUser) return;
     const { data, error } = await supabase
         .from('user_rewards')
         .select('*')
+        .eq('student_id', appState.currentUser.student_id) // Fetch only current user's rewards
         .order('purchase_date', { ascending: false });
     if (error) console.error("Error fetching user rewards:", error.message);
     else appState.userRewards = data;
@@ -297,7 +320,7 @@ const renderHeader = () => {
     userNameSidebar.textContent = user.name;
     userPointsSidebar.textContent = user.current_points;
     userLevelSidebar.textContent = `Lv. ${levelInfo.level}: ${levelInfo.title}`;
-    userLevelSidebar.className = `text-sm font-medium ${levelInfo.color || 'text-gray-600'} mb-1`;
+    userLevelSidebar.className = `text-sm font-medium ${levelInfo.color || 'text-gray-600 dark:text-gray-400'} mb-1`;
 };
 
 const renderCheckInCard = () => {
@@ -306,23 +329,23 @@ const renderCheckInCard = () => {
     const today = getTodayDateString();
     
     if (user.last_check_in_date === today) {
-        checkInCard.className = "bg-green-50 border border-green-200 p-5 rounded-xl mb-6 flex items-center justify-between";
+        checkInCard.className = "bg-green-50 dark:bg-green-900/50 border border-green-200 dark:border-green-800 p-5 rounded-xl mb-6 flex items-center justify-between";
         checkInCard.innerHTML = `
             <div>
-                <h3 class="text-lg font-bold text-green-800">Daily Check-in</h3>
-                <p class="text-sm text-green-700">You've already checked in today!</p>
+                <h3 class="text-lg font-bold text-green-800 dark:text-green-200">Daily Check-in</h3>
+                <p class="text-sm text-green-700 dark:text-green-300">You've already checked in today!</p>
             </div>
-            <div class="bg-green-100 text-green-700 font-bold py-2 px-4 rounded-lg flex items-center space-x-2 whitespace-nowrap">
+            <div class="bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-200 font-bold py-2 px-4 rounded-lg flex items-center space-x-2 whitespace-nowrap">
                 <i data-lucide="check" class="w-5 h-5"></i>
                 <span>Checked-in</span>
             </div>
         `;
     } else {
-        checkInCard.className = "bg-white border border-gray-200 p-5 rounded-xl mb-6 flex items-center justify-between shadow-sm";
+        checkInCard.className = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 rounded-xl mb-6 flex items-center justify-between shadow-sm";
         checkInCard.innerHTML = `
             <div>
-                <h3 class="text-lg font-bold text-gray-900">Daily Check-in</h3>
-                <p class="text-sm text-gray-600">Earn +${CHECK_IN_REWARD} points for checking in!</p>
+                <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100">Daily Check-in</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400">Earn +${CHECK_IN_REWARD} points for checking in!</p>
             </div>
             <button onclick="performCheckIn()" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 whitespace-nowrap hover:bg-green-700 transition-colors">
                 <i data-lucide="log-in" class="w-5 h-5"></i>
@@ -343,6 +366,7 @@ const renderDashboard = () => {
 
     // 2. Render Dynamic Event Card
     const now = new Date();
+    // MODIFICATION: Logic is already correct, finds first event in the future
     const upcomingEvent = appState.events.find(e => new Date(e.event_date) > now);
     
     dashboardEventCard.innerHTML = '';
@@ -360,7 +384,7 @@ const renderDashboard = () => {
         `;
     } else {
         dashboardEventCard.innerHTML = `
-            <div class="bg-white text-gray-700 p-5 rounded-xl mb-6 shadow-sm">
+            <div class="bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 p-5 rounded-xl mb-6 shadow-sm">
                 <div class="flex items-center mb-2">
                     <i data-lucide="calendar-off" class="w-5 h-5 mr-2"></i>
                     <h3 class="font-bold">No Upcoming Events</h3>
@@ -371,9 +395,12 @@ const renderDashboard = () => {
     }
     
     // 3. Render Impact Stats
-    const co2Saved = (user.lifetime_points * 0.6).toFixed(1);
-    const recycledCount = appState.history.filter(item => item.description.toLowerCase().includes('plastic')).length;
-    const eventsCount = appState.history.filter(item => item.type === 'event').length;
+    // MODIFICATION: Remove decimal from CO2
+    const co2Saved = Math.round(user.lifetime_points * 0.6);
+    // MODIFICATION: Count "Submitted"
+    const recycledCount = appState.history.filter(item => item.description.toLowerCase().includes('submitted')).length;
+    // MODIFICATION: Count "Attended"
+    const eventsCount = appState.history.filter(item => item.description.toLowerCase().includes('attended')).length;
     
     impactCo2.textContent = `${co2Saved} kg`;
     impactRecycled.textContent = recycledCount;
@@ -393,7 +420,7 @@ const renderLeaderboardDashboard = () => {
     const sortedLeaderboard = appState.leaderboard;
     
     if (!sortedLeaderboard || sortedLeaderboard.length === 0) {
-        leaderboardDashboardList.innerHTML = `<p class="text-center text-gray-500 text-sm p-4 bg-white rounded-xl shadow-sm">Leaderboard is empty.</p>`;
+        leaderboardDashboardList.innerHTML = `<p class="text-center text-gray-500 dark:text-gray-400 text-sm p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm">Leaderboard is empty.</p>`;
         return;
     }
     
@@ -403,14 +430,19 @@ const renderLeaderboardDashboard = () => {
         if (rank === 1) rankBadge = `<i data-lucide="award" class="w-6 h-6 text-yellow-500"></i>`;
         else if (rank === 2) rankBadge = `<i data-lucide="award" class="w-6 h-6 text-gray-400"></i>`;
         else if (rank === 3) rankBadge = `<i data-lucide="award" class="w-6 h-6 text-yellow-700"></i>`;
-        const isCurrentUserClass = user.student_id === appState.currentUser.student_id ? 'bg-green-100 border-l-4 border-green-500' : 'bg-white';
+        
+        const isCurrentUser = user.student_id === appState.currentUser.student_id;
+        const isCurrentUserClass = isCurrentUser ? 'bg-green-100 dark:bg-green-900/50 border-l-4 border-green-500' : 'bg-white dark:bg-gray-800';
+        
+        // MODIFICATION: Add (You) after name
+        const displayName = isCurrentUser ? `${user.name} (You)` : user.name;
         
         leaderboardDashboardList.innerHTML += `
             <div class="flex items-center ${isCurrentUserClass} p-4 rounded-xl shadow-sm">
                 <div class="w-8 flex justify-center items-center mr-3">${rankBadge}</div>
                 <img src="${user.avatar_url || 'https://placehold.co/40x40/gray/white?text=User'}" class="w-10 h-10 rounded-full mr-3" alt="${user.name}">
-                <p class="font-semibold text-gray-700">${user.student_id === appState.currentUser.student_id ? 'You' : user.name}</p>
-                <p class="ml-auto font-bold text-gray-600">${user.lifetime_points} Pts</p>
+                <p class="font-semibold text-gray-700 dark:text-gray-200">${displayName}</p>
+                <p class="ml-auto font-bold text-gray-600 dark:text-gray-300">${user.lifetime_points} Pts</p>
             </div>
         `;
     });
@@ -422,24 +454,29 @@ const renderLeaderboardPage = () => {
     const sortedLeaderboard = appState.leaderboard;
     
     if (!sortedLeaderboard || sortedLeaderboard.length === 0) {
-        leaderboardPageList.innerHTML = `<p class="text-center text-gray-500 text-sm p-4 bg-white rounded-xl shadow-sm">Leaderboard is empty.</p>`;
+        leaderboardPageList.innerHTML = `<p class="text-center text-gray-500 dark:text-gray-400 text-sm p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm">Leaderboard is empty.</p>`;
         return;
     }
     
     sortedLeaderboard.forEach((user, index) => {
         const rank = index + 1;
-        let rankBadge = `<span class="font-bold text-gray-500 w-6 text-center">${rank}.</span>`;
+        let rankBadge = `<span class="font-bold text-gray-500 dark:text-gray-400 w-6 text-center">${rank}.</span>`;
         if (rank === 1) rankBadge = `<i data-lucide="award" class="w-6 h-6 text-yellow-500"></i>`;
         else if (rank === 2) rankBadge = `<i data-lucide="award" class="w-6 h-6 text-gray-400"></i>`;
         else if (rank === 3) rankBadge = `<i data-lucide="award" class="w-6 h-6 text-yellow-700"></i>`;
-        const isCurrentUserClass = user.student_id === appState.currentUser.student_id ? 'bg-green-100 border-2 border-green-500' : 'bg-white';
         
+        const isCurrentUser = user.student_id === appState.currentUser.student_id;
+        const isCurrentUserClass = isCurrentUser ? 'bg-green-100 dark:bg-green-900/50 border-2 border-green-500' : 'bg-white dark:bg-gray-800';
+        
+        // MODIFICATION: Add (You) after name
+        const displayName = isCurrentUser ? `${user.name} (You)` : user.name;
+
         leaderboardPageList.innerHTML += `
             <div class="flex items-center ${isCurrentUserClass} p-4 rounded-xl shadow-sm">
                 <div class="w-8 flex justify-center items-center mr-3">${rankBadge}</div>
                 <img src="${user.avatar_url || 'https://placehold.co/40x40/gray/white?text=User'}" class="w-10 h-10 rounded-full mr-3" alt="${user.name}">
-                <p class="font-semibold text-gray-700">${user.student_id === appState.currentUser.student_id ? 'You' : user.name}</p>
-                <p class="ml-auto font-bold text-gray-600">${user.lifetime_points} Pts</p>
+                <p class="font-semibold text-gray-700 dark:text-gray-200">${displayName}</p>
+                <p class="ml-auto font-bold text-gray-600 dark:text-gray-300">${user.lifetime_points} Pts</p>
             </div>
         `;
     });
@@ -451,22 +488,22 @@ const renderChallengeCard = (challenge) => {
     if (challenge.status === 'active') {
         buttonHTML = `<button onclick="completeChallenge('${challenge.id}')" class="w-full bg-green-600 text-white font-bold py-2 px-4 rounded-lg text-sm hover:bg-green-700 transition-colors">Complete</button>`;
     } else {
-        buttonHTML = `<button class="w-full bg-gray-300 text-gray-500 font-bold py-2 px-4 rounded-lg text-sm cursor-not-allowed flex items-center justify-center space-x-2" disabled>
+        buttonHTML = `<button class="w-full bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 font-bold py-2 px-4 rounded-lg text-sm cursor-not-allowed flex items-center justify-center space-x-2" disabled>
                         <i data-lucide="check" class="w-5 h-5"></i>
                         <span>Completed</span>
                     </button>`;
     }
 
     return `
-        <div class="bg-white p-4 rounded-xl shadow-md">
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md">
             <div class="flex items-start">
-                <div class="p-3 bg-yellow-100 rounded-lg mr-4">
-                    <i data-lucide="${challenge.icon || 'award'}" class="w-6 h-6 text-yellow-600"></i>
+                <div class="p-3 bg-yellow-100 dark:bg-yellow-900/50 rounded-lg mr-4">
+                    <i data-lucide="${challenge.icon || 'award'}" class="w-6 h-6 text-yellow-600 dark:text-yellow-400"></i>
                 </div>
                 <div class="flex-grow">
-                    <h3 class="font-bold text-gray-800 text-lg">${challenge.title}</h3>
-                    <p class="text-sm text-gray-500 mb-3">${challenge.description}</p>
-                    <p class="text-sm font-bold text-green-600 mb-3">+${challenge.points_reward} EcoPoints</p>
+                    <h3 class="font-bold text-gray-800 dark:text-gray-100 text-lg">${challenge.title}</h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">${challenge.description}</p>
+                    <p class="text-sm font-bold text-green-600 dark:text-green-400 mb-3">+${challenge.points_reward} EcoPoints</p>
                     ${buttonHTML}
                 </div>
             </div>
@@ -479,7 +516,7 @@ const renderChallengesPage = () => {
     const challenges = appState.dailyChallenges;
     
     if(!challenges || challenges.length === 0) {
-        challengesPageList.innerHTML = `<p class="text-center text-gray-500">No challenges available today. Check back tomorrow!</p>`;
+        challengesPageList.innerHTML = `<p class="text-center text-gray-500 dark:text-gray-400">No challenges available today. Check back tomorrow!</p>`;
         return;
     }
 
@@ -494,7 +531,7 @@ const renderChallengesDashboard = () => {
     const activeChallenges = appState.dailyChallenges.filter(c => c.status === 'active').slice(0, 2);
 
     if (activeChallenges.length === 0) {
-        challengesDashboardList.innerHTML = `<p class="text-center text-gray-500 text-sm p-4 bg-white rounded-xl shadow-sm">You've completed all daily challenges!</p>`;
+        challengesDashboardList.innerHTML = `<p class="text-center text-gray-500 dark:text-gray-400 text-sm p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm">You've completed all daily challenges!</p>`;
         return;
     }
 
@@ -504,7 +541,6 @@ const renderChallengesDashboard = () => {
     lucide.createIcons();
 };
 
-// --- MODIFIED: renderProfile (formats date) ---
 const renderProfile = () => {
     const user = appState.currentUser;
     if (!user) return;
@@ -514,11 +550,10 @@ const renderProfile = () => {
     profileAvatar.src = user.avatar_url || 'https://placehold.co/80x80/gray/white?text=User';
     profileName.textContent = user.name;
     profileEmail.textContent = user.email;
-    // Format: dd/mm/yyyy
     profileJoined.textContent = `Joined ${new Date(user.joined_at).toLocaleDateString('en-GB')}`;
     
     profileLevelTitle.textContent = levelInfo.title;
-    profileLevelTitle.className = `text-sm font-semibold ${levelInfo.color || 'text-gray-600'}`;
+    profileLevelTitle.className = `text-sm font-semibold ${levelInfo.color || 'text-gray-600 dark:text-gray-400'}`;
     profileLevelNumber.textContent = levelInfo.level;
     profileLevelProgress.style.width = `${levelInfo.progress}%`;
     profileLevelProgress.className = `h-2.5 rounded-full ${levelInfo.progressBg || 'bg-gray-500'}`; 
@@ -531,22 +566,22 @@ const renderProfile = () => {
 
     if (user.is_green_club_member) {
         profileMembership.innerHTML = `
-            <div class="p-3 bg-green-100 rounded-lg mr-4">
-                <i data-lucide="leaf" class="w-6 h-6 text-green-600"></i>
+            <div class="p-3 bg-green-100 dark:bg-green-900/50 rounded-lg mr-4">
+                <i data-lucide="leaf" class="w-6 h-6 text-green-600 dark:text-green-400"></i>
             </div>
             <div>
-                <p class="font-semibold text-gray-900">Green Club</p>
-                <p class="text-sm text-green-600">Active Member</p>
+                <p class="font-semibold text-gray-900 dark:text-gray-100">Green Club</p>
+                <p class="text-sm text-green-600 dark:text-green-400">Active Member</p>
             </div>
         `;
     } else {
         profileMembership.innerHTML = `
-            <div class="p-3 bg-gray-100 rounded-lg mr-4">
-                <i data-lucide="x-circle" class="w-6 h-6 text-gray-500"></i>
+            <div class="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mr-4">
+                <i data-lucide="x-circle" class="w-6 h-6 text-gray-500 dark:text-gray-400"></i>
             </div>
             <div>
-                <p class="font-semibold text-gray-900">No Memberships</p>
-                <p class="text-sm text-gray-500">Join a club to see it here.</p>
+                <p class="font-semibold text-gray-900 dark:text-gray-100">No Memberships</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Join a club to see it here.</p>
             </div>
         `;
     }
@@ -562,7 +597,7 @@ const renderEcoPointsPage = () => {
 
     ecopointsBalance.textContent = user.current_points;
     ecopointsLevelTitle.textContent = levelInfo.title;
-    ecopointsLevelTitle.className = `text-sm font-semibold ${levelInfo.color || 'text-gray-600'}`;
+    ecopointsLevelTitle.className = `text-sm font-semibold ${levelInfo.color || 'text-gray-600 dark:text-gray-400'}`;
     ecopointsLevelNumber.textContent = levelInfo.level;
     ecopointsLevelProgress.style.width = `${levelInfo.progress}%`;
     ecopointsLevelProgress.className = `h-2.5 rounded-full ${levelInfo.progressBg || 'bg-gray-500'}`; 
@@ -592,16 +627,16 @@ const renderEcoPointsPage = () => {
         const titleH5 = textContent.querySelector('h5'); 
         
         textContent.classList.remove('opacity-60');
-        numberSpan.classList.remove('text-green-600', 'text-gray-400', 'scale-110');
-        titleH5.classList.remove('text-green-700', 'font-extrabold');
+        numberSpan.classList.remove('text-green-600', 'dark:text-green-400', 'text-gray-400', 'dark:text-gray-600', 'scale-110');
+        titleH5.classList.remove('text-green-700', 'dark:text-green-300', 'font-extrabold');
 
         if (level.level_number < levelInfo.level) {
-            numberSpan.classList.add('text-green-600');
+            numberSpan.classList.add('text-green-600', 'dark:text-green-400');
         } else if (level.level_number === levelInfo.level) {
-            numberSpan.classList.add('text-green-600', 'scale-110'); 
-            titleH5.classList.add('text-green-700', 'font-extrabold'); 
+            numberSpan.classList.add('text-green-600', 'dark:text-green-400', 'scale-110'); 
+            titleH5.classList.add('text-green-700', 'dark:text-green-300', 'font-extrabold'); 
         } else {
-            numberSpan.classList.add('text-gray-400');
+            numberSpan.classList.add('text-gray-400', 'dark:text-gray-600');
             textContent.classList.add('opacity-60'); 
         }
     });
@@ -614,22 +649,22 @@ const renderEcoPointsPage = () => {
     ecopointsRecentActivity.innerHTML = '';
     const historySummary = appState.history.slice(0, 3);
     if (historySummary.length === 0) {
-         ecopointsRecentActivity.innerHTML = `<p class="text-center text-gray-500 text-sm">No transactions yet.</p>`;
+         ecopointsRecentActivity.innerHTML = `<p class="text-center text-gray-500 dark:text-gray-400 text-sm">No transactions yet.</p>`;
     } else {
         historySummary.forEach(item => {
-            const pointClass = item.points_change >= 0 ? 'text-green-600' : 'text-red-600';
+            const pointClass = item.points_change >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
             const sign = item.points_change >= 0 ? '+' : '';
             const icon = item.type === 'reward-purchase' ? 'shopping-cart' : 
                          item.type === 'check-in' ? 'log-in' : 
                          item.type === 'event' ? 'calendar-check' : 'award';
             ecopointsRecentActivity.innerHTML += `
                 <div class="flex items-center">
-                    <div class="p-2 bg-gray-100 rounded-lg mr-3">
-                        <i data-lucide="${icon}" class="w-5 h-5 text-gray-600"></i>
+                    <div class="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg mr-3">
+                        <i data-lucide="${icon}" class="w-5 h-5 text-gray-600 dark:text-gray-300"></i>
                     </div>
                     <div class="flex-grow">
-                        <p class="font-semibold text-gray-800 text-sm">${item.description}</p>
-                        <p class="text-xs text-gray-500">${new Date(item.created_at).toLocaleDateString('en-GB')}</p>
+                        <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm">${item.description}</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">${new Date(item.created_at).toLocaleDateString('en-GB')}</p>
                     </div>
                     <p class="font-bold text-sm ${pointClass}">${sign}${item.points_change}</p>
                 </div>
@@ -644,28 +679,28 @@ const renderHistory = () => {
     const sortedHistory = appState.history;
     
     if (sortedHistory.length === 0) {
-        historyList.innerHTML = `<p class="text-center text-gray-500">No activity yet.</p>`;
+        historyList.innerHTML = `<p class="text-center text-gray-500 dark:text-gray-400">No activity yet.</p>`;
         return;
     }
     sortedHistory.forEach(item => {
-        const pointClass = item.points_change >= 0 ? 'text-green-600' : 'text-red-600';
+        const pointClass = item.points_change >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
         const sign = item.points_change >= 0 ? '+' : '';
         const icon = item.type === 'reward-purchase' ? 'shopping-cart' : 
                      item.type === 'check-in' ? 'log-in' : 
                      item.type === 'event' ? 'calendar-check' : 'award';
         
         historyList.innerHTML += `
-            <div class="bg-white p-4 rounded-xl shadow-sm flex items-center">
-                <div class="p-3 bg-gray-100 rounded-lg mr-4">
-                    <i data-lucide="${icon}" class="w-6 h-6 text-gray-600"></i>
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm flex items-center">
+                <div class="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mr-4">
+                    <i data-lucide="${icon}" class="w-6 h-6 text-gray-600 dark:text-gray-300"></i>
                 </div>
                 <div class="flex-grow">
-                    <p class="font-semibold text-gray-800">${item.description}</p>
-                    <p class="text-xs text-gray-500">${new Date(item.created_at).toLocaleDateString('en-GB')}</p>
+                    <p class="font-semibold text-gray-800 dark:text-gray-100">${item.description}</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">${new Date(item.created_at).toLocaleDateString('en-GB')}</p>
                 </div>
                 <div class="text-right">
                     <p class="font-bold ${pointClass}">${sign}${item.points_change}</p>
-                    <p class="text-xs text-gray-500">EcoPoints</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">EcoPoints</p>
                 </div>
             </div>
         `;
@@ -677,7 +712,7 @@ const renderEvents = () => {
     eventList.innerHTML = '';
     const events = appState.events;
     if (!events || events.length === 0) {
-        eventList.innerHTML = `<p class="text-center text-gray-500">No upcoming events scheduled.</p>`;
+        eventList.innerHTML = `<p class="text-center text-gray-500 dark:text-gray-400">No upcoming events scheduled.</p>`;
         return;
     }
 
@@ -685,20 +720,20 @@ const renderEvents = () => {
         const hasRSVPd = appState.eventRsvps.some(rsvp => rsvp.event_id === e.id);
         
         const rsvpButton = hasRSVPd
-            ? `<button class="bg-gray-300 text-gray-600 font-bold py-2 px-4 rounded-lg text-sm w-full" disabled>Attending</button>`
+            ? `<button class="bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-400 font-bold py-2 px-4 rounded-lg text-sm w-full cursor-not-allowed" disabled>Attending</button>`
             : `<button onclick="updateEventRSVP(${e.id})" class="bg-green-500 text-white font-bold py-2 px-4 rounded-lg text-sm hover:bg-green-600 w-full">RSVP Now</button>`;
         
+        // MODIFICATION: Removed points text
         eventList.innerHTML += `
-            <div class="bg-white p-4 rounded-xl shadow-md">
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md">
                 <div class="flex items-start">
-                    <div class="p-3 bg-purple-100 rounded-lg mr-4">
-                        <i data-lucide="calendar" class="w-6 h-6 text-purple-600"></i>
+                    <div class="p-3 bg-purple-100 dark:bg-purple-900/50 rounded-lg mr-4">
+                        <i data-lucide="calendar" class="w-6 h-6 text-purple-600 dark:text-purple-400"></i>
                     </div>
                     <div class="flex-grow">
-                        <p class="text-xs font-semibold text-purple-600">${new Date(e.event_date).toLocaleString('en-GB')}</p>
-                        <h3 class="font-bold text-gray-800 text-lg">${e.title}</h3>
-                        <p class="text-sm text-gray-500 mb-3">${e.description}</p>
-                        <p class="text-sm font-bold text-green-600 mb-3">+${e.points_reward} EcoPoints for attending</p>
+                        <p class="text-xs font-semibold text-purple-600 dark:text-purple-400">${new Date(e.event_date).toLocaleString('en-GB')}</p>
+                        <h3 class="font-bold text-gray-800 dark:text-gray-100 text-lg">${e.title}</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">${e.description}</p>
                         ${rsvpButton}
                     </div>
                 </div>
@@ -712,20 +747,20 @@ const renderProductCard = (product, storeId, type = 'grid') => {
     const cardWidth = type === 'preview' ? 'w-36' : 'w-full';
     
     return `
-        <div class="${cardWidth} flex-shrink-0 bg-white border rounded-xl overflow-hidden flex flex-col shadow-md cursor-pointer transition-shadow hover:shadow-lg" 
+        <div class="${cardWidth} flex-shrink-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden flex flex-col shadow-md cursor-pointer transition-shadow hover:shadow-lg" 
              onclick="showProductDetailPage('${storeId}', '${product.id}')">
             
             <img src="${product.images ? product.images[0] : 'https://placehold.co/300x400/gray/white?text=No+Img'}" alt="${product.name}" class="w-full h-48 object-cover">
             <div class="p-3 flex flex-col flex-grow">
-                <p class="font-bold text-gray-800 text-sm truncate">${product.name}</p>
+                <p class="font-bold text-gray-800 dark:text-gray-100 text-sm truncate">${product.name}</p>
                 
                 <div class="mt-auto pt-2">
-                    <p class="text-xs text-gray-400 line-through">₹${product.original_price_inr || '0'}</p>
-                    <div class="flex items-center font-bold text-gray-800 my-1">
-                        <span class="text-md text-green-700">₹${product.discounted_price_inr || '0'}</span>
-                        <span class="mx-1 text-gray-400 text-xs">+</span>
+                    <p class="text-xs text-gray-400 dark:text-gray-500 line-through">₹${product.original_price_inr || '0'}</p>
+                    <div class="flex items-center font-bold text-gray-800 dark:text-gray-100 my-1">
+                        <span class="text-md text-green-700 dark:text-green-400">₹${product.discounted_price_inr || '0'}</span>
+                        <span class="mx-1 text-gray-400 dark:text-gray-500 text-xs">+</span>
                         <i data-lucide="leaf" class="w-3 h-3 text-green-500 mr-1"></i>
-                        <span class="text-sm text-green-700">${product.cost_in_points}</span>
+                        <span class="text-sm text-green-700 dark:text-green-400">${product.cost_in_points}</span>
                     </div>
                 </div>
             </div>
@@ -745,13 +780,13 @@ const renderRewards = () => {
         });
 
         storeListPreview.innerHTML += `
-            <div class="bg-white rounded-xl shadow-md overflow-hidden">
-                <div class="p-4 flex items-center justify-between border-b bg-gray-50">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
+                <div class="p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
                     <div class="flex items-center cursor-pointer" onclick="showStoreDetailPage('${store.id}')">
-                        <img src="${store.logo_url || 'https://placehold.co/40x40/gray/white?text=Store'}" class="w-10 h-10 rounded-full mr-3 border">
-                        <h3 class="text-lg font-bold text-gray-800">${store.name}</h3>
+                        <img src="${store.logo_url || 'https://placehold.co/40x40/gray/white?text=Store'}" class="w-10 h-10 rounded-full mr-3 border dark:border-gray-700">
+                        <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100">${store.name}</h3>
                     </div>
-                    <button onclick="showStoreDetailPage('${store.id}')" class="text-sm font-semibold text-green-600 hover:text-green-700">
+                    <button onclick="showStoreDetailPage('${store.id}')" class="text-sm font-semibold text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300">
                         View All
                     </button>
                 </div>
@@ -771,7 +806,7 @@ const renderMyRewardsPage = () => {
     const allRewards = appState.userRewards; 
 
     if (!allRewards || allRewards.length === 0) {
-        allRewardsList.innerHTML = `<p class="text-center text-gray-500 p-4">You have no rewards. Visit the Eco-Store to get some!</p>`;
+        allRewardsList.innerHTML = `<p class="text-center text-gray-500 dark:text-gray-400 p-4">You have no rewards. Visit the Eco-Store to get some!</p>`;
     } else {
         allRewards.forEach(userReward => {
             const rewardDetails = getRewardDetails(userReward);
@@ -779,12 +814,12 @@ const renderMyRewardsPage = () => {
 
             if (rewardDetails.status === 'active') {
                 allRewardsList.innerHTML += `
-                    <div class="bg-white rounded-xl shadow-md overflow-hidden flex">
-                        <img src="${rewardDetails.images ? rewardDetails.images[0] : 'https://placehold.co/300x400/gray/white?text=No+Img'}" alt="${rewardDetails.name}" class="w-28 h-full object-cover">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden flex">
+                        <img src="${rewardDetails.images ? rewardDetails.images[0] : 'https://placehold.co/300x400/gray/white?text=No+Img'}" alt="${rewardDetails.name}" class="w-28 h-auto object-cover">
                         <div class="p-4 flex-grow flex flex-col">
-                            <h3 class="font-bold text-gray-800">${rewardDetails.name}</h3>
-                            <p class="text-sm text-gray-500">${rewardDetails.storeName}</p>
-                            <p class="text-xs text-gray-400 mb-2 mt-1">Purchased: ${new Date(rewardDetails.purchaseDate).toLocaleDateString('en-GB')}</p>
+                            <h3 class="font-bold text-gray-800 dark:text-gray-100">${rewardDetails.name}</h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">${rewardDetails.storeName}</p>
+                            <p class="text-xs text-gray-400 dark:text-gray-500 mb-2 mt-1">Purchased: ${new Date(rewardDetails.purchaseDate).toLocaleDateString('en-GB')}</p>
                             <button onclick="openRewardQrModal('${userReward.id}')" class="mt-auto w-full bg-green-500 text-white font-bold py-2 px-4 rounded-lg text-sm hover:bg-green-600">
                                 Use Now
                             </button>
@@ -793,14 +828,14 @@ const renderMyRewardsPage = () => {
                 `;
             } else {
                 allRewardsList.innerHTML += `
-                    <div class="bg-white rounded-xl shadow-md overflow-hidden flex opacity-60">
-                        <img src="${rewardDetails.images ? rewardDetails.images[0] : 'https://placehold.co/300x400/gray/white?text=No+Img'}" alt="${rewardDetails.name}" class="w-28 h-full object-cover">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden flex opacity-60">
+                        <img src="${rewardDetails.images ? rewardDetails.images[0] : 'https://placehold.co/300x400/gray/white?text=No+Img'}" alt="${rewardDetails.name}" class="w-28 h-auto object-cover">
                         <div class="p-4 flex-grow">
-                            <h3 class="font-bold text-gray-800">${rewardDetails.name}</h3>
-                            <p class="text-sm text-gray-500">${rewardDetails.storeName}</p>
-                            <p class="text-xs text-gray-400 mt-1">Purchased: ${new Date(rewardDetails.purchaseDate).toLocaleDateString('en-GB')}</p>
-                            <p class="text-xs text-gray-500 font-semibold">Used: ${new Date(rewardDetails.usedDate).toLocaleDateString('en-GB')}</p>
-                            <div class="mt-2 w-full bg-gray-200 text-gray-500 font-bold py-2 px-4 rounded-lg text-sm text-center">
+                            <h3 class="font-bold text-gray-800 dark:text-gray-100">${rewardDetails.name}</h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">${rewardDetails.storeName}</p>
+                            <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Purchased: ${new Date(rewardDetails.purchaseDate).toLocaleDateString('en-GB')}</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 font-semibold">Used: ${new Date(rewardDetails.usedDate).toLocaleDateString('en-GB')}</p>
+                            <div class="mt-2 w-full bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 font-bold py-2 px-4 rounded-lg text-sm text-center">
                                 Redeemed
                             </div>
                         </div>
@@ -821,6 +856,10 @@ window.performCheckIn = async () => {
     if (appState.currentUser.last_check_in_date === today) {
         return; 
     }
+    
+    // Disable button to prevent double-click
+    const checkInButton = checkInCard.querySelector('button');
+    if(checkInButton) checkInButton.disabled = true;
 
     const { error: updateError } = await supabase
         .from('students')
@@ -829,6 +868,7 @@ window.performCheckIn = async () => {
 
     if (updateError) {
         console.error("Error updating check-in:", updateError.message);
+        if(checkInButton) checkInButton.disabled = false;
         return;
     }
 
@@ -843,6 +883,8 @@ window.performCheckIn = async () => {
     
     if (pointsError) {
         console.error("Error logging check-in points:", pointsError.message);
+         if(checkInButton) checkInButton.disabled = false;
+        // Note: May need to revert student check-in date if this fails
         return;
     }
 
@@ -850,9 +892,9 @@ window.performCheckIn = async () => {
     appState.currentUser.last_check_in_date = today;
     appState.currentUser.current_points += CHECK_IN_REWARD;
     appState.currentUser.lifetime_points += CHECK_IN_REWARD;
-    appState.history.unshift({ 
-        ... (await supabase.from('points_history').select('*').order('created_at', { ascending: false }).limit(1)).data[0] 
-    }); // Quick refresh of history
+    
+    // Refresh history from scratch to get the new item
+    await fetchHistory(); 
 
     renderCheckInCard();
     renderHeader(); 
@@ -890,6 +932,7 @@ window.completeChallenge = async (challengeId) => {
 
     if (pointsError) {
         console.error("Error logging challenge points:", pointsError.message);
+        // Note: May need to revert completion if this fails
         return;
     }
 
@@ -897,9 +940,8 @@ window.completeChallenge = async (challengeId) => {
     challenge.status = 'completed';
     appState.currentUser.current_points += challenge.points_reward;
     appState.currentUser.lifetime_points += challenge.points_reward;
-    appState.history.unshift({ 
-        ... (await supabase.from('points_history').select('*').order('created_at', { ascending: false }).limit(1)).data[0] 
-    });
+    
+    await fetchHistory(); // Refresh history
 
     renderHeader();
     renderChallengesPage();
@@ -917,11 +959,11 @@ window.showPage = (pageId) => {
     }
     
     sidebarNavItems.forEach(item => {
-        item.classList.toggle('active', item.getAttribute('onclick').includes(`'${pageId}'`));
+        item.classList.toggle('active', item.getAttribute('onclick')?.includes(`'${pageId}'`));
     });
     
     navItems.forEach(item => {
-        item.classList.toggle('active', item.getAttribute('onclick').includes(`'${pageId}'`));
+        item.classList.toggle('active', item.getAttribute('onclick')?.includes(`'${pageId}'`));
     });
     
     mainContent.scrollTop = 0;
@@ -935,7 +977,7 @@ window.showPage = (pageId) => {
     if (pageId === 'leaderboard') renderLeaderboardPage();
     if (pageId === 'rewards') renderRewards();
     if (pageId === 'challenges') renderChallengesPage();
-    if (pageId === 'events') renderEvents(); // <-- FIX
+    if (pageId === 'events') renderEvents();
     if (pageId === 'dashboard') renderDashboard();
     if (pageId === 'change-password') {
         passwordMessage.textContent = '';
@@ -959,15 +1001,15 @@ window.showStoreDetailPage = (storeId) => {
         });
     
     storeDetailPage.innerHTML = `
-        <div class="p-4 bg-white sticky top-0 z-10 border-b flex items-center">
-            <button onclick="showPage('rewards')" class="p-2 text-gray-600 -ml-2 mr-2">
+        <div class="p-4 bg-white dark:bg-gray-950 sticky top-0 z-10 border-b dark:border-gray-800 flex items-center">
+            <button onclick="showPage('rewards')" class="p-2 text-gray-600 dark:text-gray-300 -ml-2 mr-2">
                 <i data-lucide="arrow-left" class="w-6 h-6"></i>
             </button>
-            <img src="${store.logo_url || 'https://placehold.co/40x40/gray/white?text=Store'}" class="w-10 h-10 rounded-full mr-3 border">
-            <h2 class="text-xl font-bold text-gray-800">${store.name}</h2>
+            <img src="${store.logo_url || 'https://placehold.co/40x40/gray/white?text=Store'}" class="w-10 h-10 rounded-full mr-3 border dark:border-gray-700">
+            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">${store.name}</h2>
         </div>
         <div class="p-6">
-            <h3 class="text-xl font-semibold text-gray-700 mb-4">All Products</h3>
+            <h3 class="text-xl font-semibold text-gray-700 dark:text-gray-200 mb-4">All Products</h3>
             <div class="grid grid-cols-2 gap-4">
                 ${productsHTML}
             </div>
@@ -980,7 +1022,6 @@ window.showStoreDetailPage = (storeId) => {
     lucide.createIcons();
 };
 
-// --- MODIFIED: showProductDetailPage (A4 image, multiple images) ---
 window.showProductDetailPage = (storeId, productId) => {
     logActivity('page_view', { page: 'product_detail', productId });
     const { store, product } = getProduct(storeId, productId);
@@ -1002,9 +1043,9 @@ window.showProductDetailPage = (storeId, productId) => {
     if (product.specifications) {
         for (const [key, value] of Object.entries(product.specifications)) {
             specsHTML += `
-                <div class="bg-gray-100 p-3 rounded-lg text-center">
-                    <p class="text-xs text-gray-500">${key}</p>
-                    <p class="font-semibold text-gray-800 text-sm">${value}</p>
+                <div class="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg text-center">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">${key}</p>
+                    <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm">${value}</p>
                 </div>
             `;
         }
@@ -1031,44 +1072,44 @@ window.showProductDetailPage = (storeId, productId) => {
     productDetailPage.innerHTML = `
         <div class="pb-24">
             <div class="relative">
-                <img id="product-main-image" src="${mainImage}" alt="${product.name}" class="w-full h-[32rem] object-cover bg-gray-200">
-                <button onclick="showStoreDetailPage('${store.id}')" class="absolute top-4 left-4 p-2 bg-white/80 rounded-full shadow-md text-gray-700">
+                <img id="product-main-image" src="${mainImage}" alt="${product.name}" class="w-full h-[32rem] object-cover bg-gray-200 dark:bg-gray-700">
+                <button onclick="showStoreDetailPage('${store.id}')" class="absolute top-4 left-4 p-2 bg-white/80 dark:bg-gray-800/80 rounded-full shadow-md text-gray-700 dark:text-gray-200">
                     <i data-lucide="arrow-left" class="w-6 h-6"></i>
                 </button>
             </div>
             
             ${thumbnailsHTML ? `
-            <div class="p-4 bg-white border-b">
+            <div class="p-4 bg-white dark:bg-gray-950 border-b dark:border-gray-800">
                 <div class="flex space-x-3 overflow-x-auto horizontal-scroll">
                     ${thumbnailsHTML}
                 </div>
             </div>
             ` : ''}
             
-            <div class="p-6 bg-white">
-                <h2 class="text-3xl font-bold text-gray-800">${product.name}</h2>
-                <p class="text-sm text-gray-500 mb-6">${store.name}</p>
+            <div class="p-6 bg-white dark:bg-gray-900">
+                <h2 class="text-3xl font-bold text-gray-800 dark:text-gray-100">${product.name}</h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">${store.name}</p>
                 
-                <h3 class="text-xl font-bold text-gray-900 mb-3">Description</h3>
-                <p class="text-gray-600 mb-6 leading-relaxed">${product.description || 'No description available.'}</p>
+                <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-3">Description</h3>
+                <p class="text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">${product.description || 'No description available.'}</p>
 
-                <h3 class="text-xl font-bold text-gray-900 mb-3">Features</h3>
-                <ul class="space-y-2 text-gray-600 mb-6">${featuresHTML}</ul>
+                <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-3">Features</h3>
+                <ul class="space-y-2 text-gray-600 dark:text-gray-300 mb-6">${featuresHTML}</ul>
 
-                <h3 class="text-xl font-bold text-gray-900 mb-3">Specifications</h3>
+                <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-3">Specifications</h3>
                 <div class="grid grid-cols-2 gap-3 mb-6">${specsHTML}</div>
             </div>
         </div>
 
-        <div class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t p-4 shadow-lg-top">
+        <div class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white dark:bg-gray-950 border-t dark:border-gray-800 p-4 shadow-lg-top">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-sm text-gray-500 line-through">₹${product.original_price_inr || '0'}</p>
-                    <div class="flex items-center font-bold text-gray-800">
-                        <span class="text-2xl text-green-700">₹${product.discounted_price_inr || '0'}</span>
-                        <span class="mx-2 text-gray-400">+</span>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 line-through">₹${product.original_price_inr || '0'}</p>
+                    <div class="flex items-center font-bold text-gray-800 dark:text-gray-100">
+                        <span class="text-2xl text-green-700 dark:text-green-400">₹${product.discounted_price_inr || '0'}</span>
+                        <span class="mx-2 text-gray-400 dark:text-gray-500">+</span>
                         <i data-lucide="leaf" class="w-5 h-5 text-green-500 mr-1"></i>
-                        <span class="text-2xl text-green-700">${product.cost_in_points}</span>
+                        <span class="text-2xl text-green-700 dark:text-green-400">${product.cost_in_points}</span>
                     </div>
                 </div>
                 <button onclick="openPurchaseModal('${store.id}', '${product.id}')" 
@@ -1130,8 +1171,8 @@ window.openPurchaseModal = (storeId, productId) => {
 
     purchaseModal.innerHTML = `
         <div class="flex justify-between items-center mb-4">
-            <h3 class="text-xl font-bold text-gray-800">Purchase Reward</h3>
-            <button onclick="closePurchaseModal()" class="text-gray-400 hover:text-gray-600">
+            <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100">Purchase Reward</h3>
+            <button onclick="closePurchaseModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                 <i data-lucide="x" class="w-6 h-6"></i>
             </button>
         </div>
@@ -1139,35 +1180,35 @@ window.openPurchaseModal = (storeId, productId) => {
         <div class="flex items-center mb-4">
             <img src="${product.images ? product.images[0] : 'https://placehold.co/300x400/gray/white?text=No+Img'}" alt="${product.name}" class="w-24 h-32 object-cover rounded-lg mr-4">
             <div>
-                <h4 class="text-lg font-bold text-gray-800">${product.name}</h4>
-                <p class="text-sm text-gray-500 mb-2">From ${store.name}</p>
-                <div class="flex items-center font-bold text-gray-800">
-                    <span class="text-lg text-green-700">₹${product.discounted_price_inr || '0'}</span>
-                    <span class="mx-1 text-gray-400">+</span>
+                <h4 class="text-lg font-bold text-gray-800 dark:text-gray-100">${product.name}</h4>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">From ${store.name}</p>
+                <div class="flex items-center font-bold text-gray-800 dark:text-gray-100">
+                    <span class="text-lg text-green-700 dark:text-green-400">₹${product.discounted_price_inr || '0'}</span>
+                    <span class="mx-1 text-gray-400 dark:text-gray-500">+</span>
                     <i data-lucide="leaf" class="w-4 h-4 text-green-500 mr-1"></i>
-                    <span class="text-lg text-green-700">${product.cost_in_points}</span>
+                    <span class="text-lg text-green-700 dark:text-green-400">${product.cost_in_points}</span>
                 </div>
             </div>
         </div>
 
-        <div class="bg-gray-100 rounded-lg p-3 mb-4 mt-4">
+        <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-3 mb-4 mt-4">
             <div class="flex justify-between items-center mb-1">
-                <span class="text-gray-600">Your Balance</span>
-                <span class="font-semibold text-gray-800">${appState.currentUser.current_points} EcoPoints</span>
+                <span class="text-gray-600 dark:text-gray-300">Your Balance</span>
+                <span class="font-semibold text-gray-800 dark:text-gray-100">${appState.currentUser.current_points} EcoPoints</span>
             </div>
-            <div class="flex justify-between items-center text-red-600">
+            <div class="flex justify-between items-center text-red-600 dark:text-red-400">
                 <span class="font-semibold">Cost</span>
                 <span class="font-bold text-lg">-${product.cost_in_points} EcoPoints</span>
             </div>
-            <hr class="my-2 border-gray-300">
-            <div class="flex justify-between items-center text-green-600">
+            <hr class="my-2 border-gray-300 dark:border-gray-600">
+            <div class="flex justify-between items-center text-green-600 dark:text-green-400">
                 <span class="font-semibold">Remaining</span>
                 <span class="font-bold text-lg">${appState.currentUser.current_points - product.cost_in_points} EcoPoints</span>
             </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
-            <button onclick="closePurchaseModal()" class="w-full bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300">
+            <button onclick="closePurchaseModal()" class="w-full bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500">
                 Cancel
             </button>
             <button onclick="confirmPurchase('${store.id}', '${product.id}')" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700">
@@ -1199,9 +1240,9 @@ window.confirmPurchase = async (storeId, productId) => {
         purchaseModal.innerHTML = `
             <div class="text-center p-4">
                 <i data-lucide="x-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
-                <h3 class="text-2xl font-bold text-gray-800 mb-2">Purchase Failed</h3>
-                <p class="text-gray-600 mb-6">You do not have enough points for this reward.</p>
-                <button onclick="closePurchaseModal()" class="w-full bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300">
+                <h3 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Purchase Failed</h3>
+                <p class="text-gray-600 dark:text-gray-300 mb-6">You do not have enough points for this reward.</p>
+                <button onclick="closePurchaseModal()" class="w-full bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500">
                     Close
                 </button>
             </div>
@@ -1243,16 +1284,17 @@ window.confirmPurchase = async (storeId, productId) => {
     logActivity('purchase_attempt_success', { productId, points: -product.cost_in_points });
     appState.currentUser.current_points -= product.cost_in_points;
     appState.userRewards.unshift(newReward);
+    await fetchHistory(); // Refresh history
 
     purchaseModal.innerHTML = `
         <div class="text-center p-4">
             <i data-lucide="check-circle" class="w-16 h-16 text-green-500 mx-auto mb-4"></i>
-            <h3 class="text-2xl font-bold text-gray-800 mb-2">Purchase Successful!</h3>
-            <p class="text-gray-600 mb-6">You can find your new reward in "My Rewards".</p>
+            <h3 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Purchase Successful!</h3>
+            <p class="text-gray-600 dark:text-gray-300 mb-6">You can find your new reward in "My Rewards".</p>
             <button onclick="closePurchaseModalAndShowMyRewards()" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 mb-2">
                 Go to My Rewards
             </button>
-            <button onclick="closePurchaseModal()" class="w-full bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300">
+            <button onclick="closePurchaseModal()" class="w-full bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500">
                 Done
             </button>
         </div>
@@ -1278,23 +1320,23 @@ window.openRewardQrModal = (userRewardId) => {
 
     qrModal.innerHTML = `
         <div class="flex justify-between items-center mb-4">
-            <h3 class="text-xl font-bold text-gray-800">${rewardDetails.name}</h3>
-            <button onclick="closeQrModal()" class="text-gray-400 hover:text-gray-600">
+            <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100">${rewardDetails.name}</h3>
+            <button onclick="closeQrModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                 <i data-lucide="x" class="w-6 h-6"></i>
             </button>
         </div>
         
-        <div class="flex justify-center mb-4 p-4 bg-white rounded-lg border">
+        <div class="flex justify-center mb-4 p-4 bg-white rounded-lg border dark:border-gray-700">
             <img src="${qrCodeUrl}" alt="QR Code" class="rounded-lg">
         </div>
 
-        <div class="bg-gray-100 rounded-lg p-4 text-left mb-6">
-            <h4 class="font-bold text-gray-800 mb-2">How to Redeem:</h4>
-            <p class="text-sm text-gray-600">${rewardDetails.instructions}</p>
+        <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 text-left mb-6">
+            <h4 class="font-bold text-gray-800 dark:text-gray-100 mb-2">How to Redeem:</h4>
+            <p class="text-sm text-gray-600 dark:text-gray-300">${rewardDetails.instructions || 'Show this QR code to the store vendor.'}</p>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
-            <button onclick="closeQrModal()" class="w-full bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300">
+            <button onclick="closeQrModal()" class="w-full bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500">
                 Done
             </button>
             <button onclick="markRewardAsUsed('${userReward.id}')" class="w-full bg-red-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-600">
@@ -1341,7 +1383,7 @@ window.markRewardAsUsed = async (userRewardId) => {
     closeQrModal();
 };
 
-// --- NEW: Handle Change Password ---
+// --- Handle Change Password ---
 async function handleChangePassword(event) {
     event.preventDefault();
     logActivity('button_click', { action: 'change_password_attempt' });
@@ -1378,6 +1420,98 @@ async function handleChangePassword(event) {
     changePasswordButton.textContent = 'Update Password';
 }
 
+// --- NEW: Handle Profile Pic Upload ---
+async function handleProfilePicUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    logActivity('button_click', { action: 'upload_profile_pic_attempt' });
+    profilePicLoader.classList.remove('hidden');
+    profilePicError.textContent = '';
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_PRESET);
+
+    try {
+        const response = await fetch(CLOUDINARY_URL, {
+            method: 'POST',
+            body: formData,
+        });
+
+        if (!response.ok) {
+            throw new Error('Upload failed');
+        }
+
+        const data = await response.json();
+        const newAvatarUrl = data.secure_url;
+
+        // Update Supabase
+        const { error: updateError } = await supabase
+            .from('students')
+            .update({ avatar_url: newAvatarUrl })
+            .eq('student_id', appState.currentUser.student_id);
+
+        if (updateError) {
+            throw new Error(updateError.message);
+        }
+        
+        // Update local state and UI
+        appState.currentUser.avatar_url = newAvatarUrl;
+        profileAvatar.src = newAvatarUrl;
+        userAvatarSidebar.src = newAvatarUrl;
+        
+        logActivity('upload_profile_pic_success');
+        
+    } catch (error) {
+        console.error("Error uploading profile picture:", error.message);
+        profilePicError.textContent = 'Upload failed. Please try again.';
+        logActivity('upload_profile_pic_failed', { error: error.message });
+    } finally {
+        profilePicLoader.classList.add('hidden');
+        // Clear the file input value so the 'change' event fires again if the same file is selected
+        event.target.value = null;
+    }
+}
+
+// --- NEW: Theme Toggle Logic ---
+function setAppTheme(theme) {
+    if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+        themeToggleBtn.querySelector('span').classList.add('dark:translate-x-6');
+        themeIcon.setAttribute('data-lucide', 'moon');
+        themeText.textContent = 'Dark Mode';
+        localStorage.setItem('theme', 'dark');
+    } else {
+        document.documentElement.classList.remove('dark');
+        themeToggleBtn.querySelector('span').classList.remove('dark:translate-x-6');
+        themeIcon.setAttribute('data-lucide', 'sun');
+        themeText.textContent = 'Light Mode';
+        localStorage.setItem('theme', 'light');
+    }
+    lucide.createIcons(); // Re-render icons
+}
+
+function toggleTheme() {
+    const currentTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    setAppTheme(newTheme);
+    logActivity('button_click', { action: 'toggle_theme', theme: newTheme });
+}
+
+function initializeTheme() {
+    const savedTheme = localStorage.getItem('theme');
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    if (savedTheme) {
+        setAppTheme(savedTheme);
+    } else if (systemPrefersDark) {
+        setAppTheme('dark');
+    } else {
+        setAppTheme('light');
+    }
+}
+
 
 // --- App Initialization ---
 
@@ -1391,7 +1525,8 @@ async function checkAuth() {
 }
 
 async function loadInitialData() {
-    appLoading.style.display = 'flex';
+    // Show loader immediately
+    appLoading.classList.remove('loaded');
 
     await fetchUserProfile();
     
@@ -1415,10 +1550,14 @@ async function loadInitialData() {
         fetchLevels()
     ]);
     
-    appLoading.style.display = 'none';
+    // Hide loader
+    appLoading.classList.add('loaded');
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Initialize theme first
+    initializeTheme();
+    
     // Add event listeners that are always present
     document.getElementById('sidebar-toggle-btn').addEventListener('click', () => toggleSidebar(false));
     logoutButton.addEventListener('click', async () => {
@@ -1427,6 +1566,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.location.href = 'login.html';
     });
     changePasswordForm.addEventListener('submit', handleChangePassword);
+    
+    // NEW Listeners
+    themeToggleBtn.addEventListener('click', toggleTheme);
+    profilePicUpload.addEventListener('change', handleProfilePicUpload);
 
 
     const isLoggedIn = await checkAuth();
