@@ -25,6 +25,7 @@ header, nav {
     overflow-x: hidden;
 }
 
+/* Page Transitions */
 .page { display: none; animation: fadeIn 0.3s ease-in-out; }
 .page.active { display: block; }
 @keyframes fadeIn {
@@ -32,6 +33,7 @@ header, nav {
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* Sidebar */
 #sidebar {
     transition: transform 0.3s ease-in-out;
 }
@@ -39,36 +41,61 @@ header, nav {
     transition: opacity 0.3s ease-in-out;
 }
 
+/* Active Nav States */
 .sidebar-nav-item.active {
-    background-color: #ECFDF5; 
-    color: #059669; 
+    background-color: #ECFDF5; /* light green */
+    color: #059669; /* dark green */
     font-weight: 600;
 }
+.dark .sidebar-nav-item.active {
+    background-color: #064E3B; /* dark: dark green */
+    color: #A7F3D0; /* dark: light green */
+}
 .sidebar-nav-item.active svg { color: #059669; }
+.dark .sidebar-nav-item.active svg { color: #A7F3D0; }
+
 
 .nav-item.active { color: #10B981; }
+.dark .nav-item.active { color: #34D399; }
 .nav-item.active svg { color: #10B981; }
+.dark .nav-item.active svg { color: #34D399; }
 
-.toggle-checkbox:checked {
-    right: 0;
-    border-color: #10B981;
-}
-.toggle-checkbox:checked + .toggle-label {
-    background-color: #10B981;
-}
 
-.level-text-content {
-    transition: opacity 0.3s ease;
-}
-.level-number-container span {
-    transition: all 0.3s ease;
-    transform-origin: center;
-}
-
+/* Custom Scrollbar for horizontal */
 .horizontal-scroll {
     -ms-overflow-style: none; /* IE and Edge */
     scrollbar-width: none; /* Firefox */
 }
 .horizontal-scroll::-webkit-scrollbar {
     display: none; /* Chrome, Safari, Opera */
+}
+
+/* Professional Loader */
+#app-loading {
+    opacity: 1;
+    visibility: visible;
+}
+#app-loading.loaded {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+@keyframes pulse-logo {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 0.8;
+    }
+}
+.app-loader-logo {
+    animation: pulse-logo 2s infinite ease-in-out;
+}
+
+/* Dark Mode Toggle */
+#theme-toggle-btn > span {
+    transition: transform 0.3s ease-in-out;
 }
