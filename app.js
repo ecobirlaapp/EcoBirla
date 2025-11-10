@@ -102,8 +102,14 @@ const themeText = document.getElementById('theme-text');
 
 // --- Helper Functions ---
 
+// --- ADD THIS NEW FUNCTION ---
 const getTodayDateString = () => {
-    return new Date().toISOString().split('T')[0];
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0'); // getMonth() is 0-indexed
+    const day = date.getDate().toString().padStart(2, '0');
+    
+    return `${year}-${month}-${day}`; // Returns local date, e.g., "2025-11-10"
 };
 
 /**
