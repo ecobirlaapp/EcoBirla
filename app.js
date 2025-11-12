@@ -102,7 +102,6 @@ const themeText = document.getElementById('theme-text');
 
 // --- Helper Functions ---
 
-// --- ADD THIS NEW FUNCTION ---
 const getTodayDateString = () => {
     const date = new Date();
     const year = date.getFullYear();
@@ -111,6 +110,60 @@ const getTodayDateString = () => {
     
     return `${year}-${month}-${day}`; // Returns local date, e.g., "2025-11-10"
 };
+
+// --- ADD THIS NEW FUNCTION ---
+const parseHash = (hash) => {
+    if (!hash || hash === '#') {
+        return { page: 'dashboard' };
+    }
+    
+    const parts = hash.substring(1).split('/');
+    
+    if (parts[0] === 'store-detail' && parts[1]) {
+        return { page: 'store-detail', storeId: parts[1] };
+    }
+    
+    if (parts[0] === 'product-detail' && parts[1] && parts[2]) {
+        return { page: 'product-detail', storeId: parts[1], productId: parts[2] };
+    }
+    
+    // Default to page ID
+    return { page: parts[0] };
+};
+
+// --- ADD THIS NEW FUNCTION ---
+const handlePopState = (state, isInitialLoad = false) => {
+    let aState = state;
+    if (!aState) {
+        aState = parseHash(window.location.hash);
+    }
+    
+    // On initial load, we must align history and state.
+    if (isInitialLoad) {
+        // If no hash, default to dashboard and replace state
+        if (!window.location.hash || window.location.hash === '#') {
+            aState = { page: 'dashboard' };
+            window.history.replaceState(aState, '', '#dashboard');
+        } else {
+            // If there is a hash, parse it and replace state
+            // to ensure our { page: ... } object is stored.
+            aState = parseHash(window.location.hash);
+            window.history.replaceState(aState, '', window.location.hash);
+        }
+    }
+
+    switch (aState.page) {
+        case 'store-detail':
+            window.showStoreDetailPage(aState.storeId, true);
+            break;
+        case 'product-detail':
+            window.showProductDetailPage(aState.storeId, aState.productId, true);
+            break;
+        default:
+            window.showPage(aState.page || 'dashboard', true);
+    }
+};
+
 
 /**
  * Activity Logging Function
@@ -954,7 +1007,16 @@ window.completeChallenge = async (challengeId) => {
     renderChallengesDashboard(); 
 };
 
-window.showPage = (pageId) => {
+// MODIFIED: Added fromHistory parameter
+window.showPage = (pageId, fromHistory = false) => {
+    // MODIFIED: Add history push state logic
+    if (!fromHistory) {
+        const newHash = `#${pageId}`;
+        if (window.location.hash !== newHash) {
+            window.history.pushState({ page: pageId }, '', newHash);
+        }
+    }
+    
     pages.forEach(p => p.classList.remove('active'));
     storeDetailPage.innerHTML = '';
     productDetailPage.innerHTML = '';
@@ -994,7 +1056,16 @@ window.showPage = (pageId) => {
     toggleSidebar(true); 
 };
 
-window.showStoreDetailPage = (storeId) => {
+// MODIFIED: Added fromHistory parameter
+window.showStoreDetailPage = (storeId, fromHistory = false) => {
+    // MODIFIED: Add history push state logic
+    if (!fromHistory) {
+        const newHash = `#store-detail/${storeId}`;
+        if (window.location.hash !== newHash) {
+            window.history.pushState({ page: 'store-detail', storeId: storeId }, '', newHash);
+        }
+    }
+    
     logActivity('page_view', { page: 'store_detail', storeId });
     const store = appState.stores.find(s => s.id === storeId);
     if (!store) return;
@@ -1028,7 +1099,16 @@ window.showStoreDetailPage = (storeId) => {
     lucide.createIcons();
 };
 
-window.showProductDetailPage = (storeId, productId) => {
+// MODIFIED: Added fromHistory parameter
+window.showProductDetailPage = (storeId, productId, fromHistory = false) => {
+    // MODIFIED: Add history push state logic
+    if (!fromHistory) {
+        const newHash = `#product-detail/${storeId}/${productId}`;
+        if (window.location.hash !== newHash) {
+            window.history.pushState({ page: 'product-detail', storeId: storeId, productId: productId }, '', newHash);
+        }
+    }
+    
     logActivity('page_view', { page: 'product_detail', productId });
     const { store, product } = getProduct(storeId, productId);
     if (!product) return;
@@ -1577,6 +1657,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     themeToggleBtn.addEventListener('click', toggleTheme);
     profilePicUpload.addEventListener('change', handleProfilePicUpload);
 
+    // --- MODIFIED: Added popstate listener ---
+    window.addEventListener('popstate', (event) => {
+        const state = event.state || parseHash(window.location.hash);
+        handlePopState(state, false); // Not initial load
+    });
+    // --- END MODIFICATION ---
 
     const isLoggedIn = await checkAuth();
     if (!isLoggedIn) {
@@ -1587,8 +1673,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Initial Renders
     renderHeader();
-    renderDashboard();
+    renderDashboard(); // Renders dashboard components, but page is hidden
     
-    showPage('dashboard');
+    // --- MODIFIED: Replaced showPage('dashboard') with handlePopState ---
+    handlePopState(null, true); // isInitialLoad = true
+    // --- END MODIFICATION ---
+    
     lucide.createIcons(); 
 });
