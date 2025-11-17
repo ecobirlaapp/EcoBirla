@@ -1,132 +1,97 @@
-// Import the Supabase client
+// login.js
+
+// Import the shared Supabase client
 import { supabase } from './supabase-client.js';
 
 // --- DOM Elements ---
 const loginForm = document.getElementById('login-form');
-const signupForm = document.getElementById('signup-form');
 const loginButton = document.getElementById('login-button');
-const signupButton = document.getElementById('signup-button');
-const authMessage = document.getElementById('auth-message');
+const errorMessage = document.getElementById('error-message');
+const studentIdInput = document.getElementById('student-id');
+const passwordInput = document.getElementById('password');
 
-// --- Helper Functions ---
-
-/**
- * Shows an error message to the user.
- * @param {string} message The error message to display.
- */
-function showMessage(message, isError = true) {
-    authMessage.textContent = message;
-    authMessage.className = isError ? 'text-red-500 text-sm text-center mb-4 h-5' : 'text-green-500 text-sm text-center mb-4 h-5';
-}
-
-/**
- * Toggles the loading state of a button.
- * @param {HTMLButtonElement} button The button element.
- * @param {boolean} isLoading Whether to show the loading state.
- */
-function setLoading(button, isLoading) {
-    const btnText = button.querySelector('.btn-text');
-    const loader = button.querySelector('i');
-    
-    if (isLoading) {
-        button.disabled = true;
-        btnText.classList.add('hidden');
-        loader.classList.remove('hidden');
-    } else {
-        button.disabled = false;
-        btnText.classList.remove('hidden');
-        loader.classList.add('hidden');
-    }
-}
-
-// --- Auth Logic ---
-
-/**
- * Handles the login form submission.
- */
-async function handleLogin(event) {
-    event.preventDefault();
-    setLoading(loginButton, true);
-    showMessage('', false); // Clear previous messages
-
-    const email = document.getElementById('login-email').value;
-    const password = document.getElementById('login-password').value;
-
-    const { data, error } = await supabase.auth.signInWithPassword({
-        email: email,
-        password: password,
-    });
-
-    if (error) {
-        showMessage(error.message);
-    } else if (data.session) {
-        // Login successful, redirect to the main app
+// --- 1. Check if user is already logged in ---
+async function checkAuth() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+        // User is already logged in, redirect to the app
         window.location.href = 'index.html';
     }
-    setLoading(loginButton, false);
 }
+// Run the check on page load
+checkAuth();
 
-/**
- * Handles the sign-up form submission.
- */
-async function handleSignUp(event) {
-    event.preventDefault();
-    setLoading(signupButton, true);
-    showMessage('', false); // Clear previous messages
 
-    // Get form data
-    const fullName = document.getElementById('signup-name').value;
-    const studentId = document.getElementById('signup-studentid').value;
-    const course = document.getElementById('signup-course').value;
-    const email = document.getElementById('signup-email').value;
-    const password = document.getElementById('signup-password').value;
+// --- 2. Handle Login Form Submission ---
+loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault(); // Prevent the form from submitting normally
     
-    // Based on your SQL schema, we pass user metadata
-    // to populate the public.users table on signup.
-    const { data, error } = await supabase.auth.signUp({
-        email: email,
-        password: password,
-        options: {
-            data: {
-                full_name: fullName,
-                student_id: studentId,
-                course: course,
-                email: email // Storing email in users table as well
+    setLoading(true);
+    hideError(); // Hide old errors
+    
+    const studentId = studentIdInput.value.trim();
+    const password = passwordInput.value;
+
+    try {
+        // --- THIS IS THE UPDATED LOGIC ---
+        
+        // Step 1: Securely call the RPC function to get the email.
+        const { data: userEmail, error: rpcError } = await supabase
+            .rpc('get_email_for_student_id', {
+                p_student_id: studentId
+            });
+
+        if (rpcError) {
+            // A database-level error occurred
+            throw new Error(rpcError.message);
+        }
+
+        if (!userEmail) {
+            // The function ran but returned null (no student found)
+            throw new Error("Invalid Student ID.");
+        }
+        
+        // --- END OF UPDATED LOGIC ---
+
+        // Step 2: Use the found email to log the user in with Supabase Auth.
+        const { error: loginError } = await supabase.auth.signInWithPassword({
+            email: userEmail,
+            password: password,
+        });
+
+        if (loginError) {
+            // Check for specific auth error
+            if (loginError.message === "Invalid login credentials") {
+                throw new Error("Invalid Student ID or Password.");
             }
+            throw loginError;
         }
-    });
 
-    if (error) {
-        showMessage(error.message);
-    } else if (data.user) {
-        // Check if email confirmation is required
-        if (data.user.identities && data.user.identities.length === 0) {
-             showMessage("Signup failed. User might already exist.", true);
-        } else {
-             showMessage("Signup successful! Please check your email to confirm.", false);
-             // Optionally, log them in directly if email confirmation is off
-             // window.location.href = 'index.html'; 
-        }
-    }
-    setLoading(signupButton, false);
-}
-
-/**
- * Checks if a user is already logged in.
- * If so, redirects them to the main app.
- */
-async function checkUserSession() {
-    const { data } = await supabase.auth.getSession();
-    if (data.session) {
-        // User is already logged in, redirect to index.html
+        // Step 3: Login successful, redirect to the main app
         window.location.href = 'index.html';
+
+    } catch (error) {
+        showError(error.message);
+        setLoading(false);
     }
-    // If no session, do nothing, let them log in.
+});
+
+function setLoading(isLoading) {
+    if (isLoading) {
+        loginButton.disabled = true;
+        loginButton.textContent = 'Logging in...';
+    } else {
+        loginButton.disabled = false;
+        loginButton.textContent = 'Login';
+    }
 }
 
-// --- Event Listeners ---
-loginForm.addEventListener('submit', handleLogin);
-signupForm.addEventListener('submit', handleSignUp);
+function showError(message) {
+    errorMessage.textContent = message;
+    errorMessage.classList.remove('hidden');
+}
 
-// Check for existing session on page load
-checkUserSession();
+function hideError() {
+    errorMessage.classList.add('hidden');
+    errorMessage.textContent = '';
+}
