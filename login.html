@@ -3,154 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EcoBirla - Login</title>
+    <title>Login - EcoBirla</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- Link to your shared stylesheet -->
     <link rel="stylesheet" href="style.css">
-    <script src="https://unpkg.com/lucide@latest"></script>
-
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        inter: ['Inter', 'sans-serif'],
-                    },
-                },
-            },
-        }
-    </script>
-    <style>
-        /* Add specific login page styles if needed */
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-color: #f3f4f6;
-        }
-        .dark body {
-            background-color: #111827;
-        }
-        .form-container {
-            max-width: 400px;
-            width: 100%;
-        }
-        /* Simple tab-like active state */
-        .tab-btn {
-            border-bottom: 2px solid transparent;
-        }
-        .tab-btn.active {
-            border-bottom-color: #10B981;
-            color: #10B981;
-        }
-        .dark .tab-btn.active {
-            border-bottom-color: #34D399;
-            color: #34D399;
-        }
-    </style>
 </head>
-<body class="dark:bg-gray-900">
+<body class="bg-gray-50">
+    <div class="app-container bg-white shadow-lg">
+        <main class="main-content p-8 flex flex-col justify-center">
+            
+            <div class="text-center mb-10">
+                <h1 class="text-4xl font-extrabold text-green-700">EcoBirla</h1>
+                <p class="text-gray-500">Sign in to your student account</p>
+            </div>
 
-    <div class="form-container p-6">
-        <div class="text-center mb-8">
-            <img src="https://i.ibb.co/d00b4v0n/Eco-Birla-2-modified.png" class="w-24 h-24 mx-auto mb-4" alt="EcoBirla Logo">
-            <h1 class="text-3xl font-extrabold text-green-700 dark:text-green-500">EcoBirla</h1>
-            <p class="text-sm font-semibold text-gray-500 dark:text-gray-400 mt-1">
-                A BKBNC GREEN CLUB INITIATIVE
-            </p>
-        </div>
+            <form id="login-form" class="space-y-6">
+                <div>
+                    <label for="student-id" class="block text-sm font-medium text-gray-700">Student ID</label>
+                    <div class="mt-1">
+                        <input id="student-id" name="student-id" type="text" required
+                               class="w-full border border-gray-300 px-3 py-2 rounded-lg shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                               placeholder="e.g., 5207872">
+                    </div>
+                </div>
 
-        <!-- Tab Buttons -->
-        <div class="flex mb-6 border-b border-gray-200 dark:border-gray-700">
-            <button id="tab-login" class="tab-btn active flex-1 py-3 text-center font-semibold text-gray-500 dark:text-gray-400" onclick="showForm('login')">
-                Login
-            </button>
-            <button id="tab-signup" class="tab-btn flex-1 py-3 text-center font-semibold text-gray-500 dark:text-gray-400" onclick="showForm('signup')">
-                Sign Up
-            </button>
-        </div>
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
+                    <div class="mt-1">
+                        <input id="password" name="password" type="password" required
+                               class="w-full border border-gray-300 px-3 py-2 rounded-lg shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                               placeholder="••••••••">
+                    </div>
+                </div>
+                
+                <div id="error-message" class="text-sm text-red-600 text-center hidden">
+                    </div>
 
-        <!-- Error Message Display -->
-        <div id="auth-message" class="text-red-500 text-sm text-center mb-4 h-5"></div>
-
-        <!-- Login Form -->
-        <form id="login-form" class="space-y-4">
-            <div>
-                <label for="login-email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
-                <input type="email" id="login-email" required class="mt-1 block w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-green-500 focus:border-green-500 bg-white dark:bg-gray-800 dark:text-white">
-            </div>
-            <div>
-                <label for="login-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
-                <input type="password" id="login-password" required class="mt-1 block w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-green-500 focus:border-green-500 bg-white dark:bg-gray-800 dark:text-white">
-            </div>
-            <button type="submit" id="login-button" class="w-full btn-eco-gradient text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:opacity-90 transition-transform active:scale-95 flex items-center justify-center">
-                <span class="btn-text">Login</span>
-                <i data-lucide="loader-circle" class="w-5 h-5 animate-spin hidden ml-2"></i>
-            </button>
-        </form>
-
-        <!-- Sign Up Form -->
-        <form id="signup-form" class="space-y-4 hidden">
-            <div>
-                <label for="signup-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Full Name</label>
-                <input type="text" id="signup-name" required class="mt-1 block w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-green-500 focus:border-green-500 bg-white dark:bg-gray-800 dark:text-white">
-            </div>
-            <div>
-                <label for="signup-studentid" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Student ID (7 Digits)</label>
-                <input type="text" id="signup-studentid" required pattern="\d{7}" maxlength="7" class="mt-1 block w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-green-500 focus:border-green-500 bg-white dark:bg-gray-800 dark:text-white">
-            </div>
-             <div>
-                <label for="signup-course" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Course (e.g., FYBCOM, SYBScIT)</label>
-                <input type="text" id="signup-course" required class="mt-1 block w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-green-500 focus:border-green-500 bg-white dark:bg-gray-800 dark:text-white">
-            </div>
-            <div>
-                <label for="signup-email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</T></label>
-                <input type="email" id="signup-email" required class="mt-1 block w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-green-500 focus:border-green-500 bg-white dark:bg-gray-800 dark:text-white">
-            </div>
-            <div>
-                <label for="signup-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
-                <input type="password" id="signup-password" required minlength="6" class="mt-1 block w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-green-500 focus:border-green-500 bg-white dark:bg-gray-800 dark:text-white">
-            </div>
-            <button type="submit" id="signup-button" class="w-full btn-eco-gradient text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:opacity-90 transition-transform active:scale-95 flex items-center justify-center">
-                <span class="btn-text">Create Account</span>
-                <i data-lucide="loader-circle" class="w-5 h-5 animate-spin hidden ml-2"></i>
-            </button>
-        </form>
-
+                <div>
+                    <button type="submit" id="login-button"
+                            class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-base font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                        Login
+                    </button>
+                </div>
+            </form>
+            
+        </main>
     </div>
-
-    <!-- Import Supabase client and login logic -->
-    <!-- Make sure to use type="module" for ES6 imports -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script type="module" src="supabase-client.js"></script>
-    <script type="module" src="login.js"></script>
-    <script>
-        lucide.createIcons();
-
-        // Simple form toggle
-        const loginForm = document.getElementById('login-form');
-        const signupForm = document.getElementById('signup-form');
-        const tabLogin = document.getElementById('tab-login');
-        const tabSignup = document.getElementById('tab-signup');
-        const authMessage = document.getElementById('auth-message');
-
-        function showForm(formName) {
-            authMessage.textContent = ''; // Clear errors
-            if (formName === 'login') {
-                loginForm.classList.remove('hidden');
-                signupForm.classList.add('hidden');
-                tabLogin.classList.add('active');
-                tabSignup.classList.remove('active');
-            } else {
-                loginForm.classList.add('hidden');
-                signupForm.classList.remove('hidden');
-                tabLogin.classList.remove('active');
-                tabSignup.classList.add('active');
-            }
-        }
-    </script>
+    
+    <script src="login.js" type="module"></script>
 </body>
 </html>
